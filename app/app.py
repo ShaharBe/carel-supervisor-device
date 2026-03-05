@@ -29,7 +29,7 @@ from client_factory import create_modbus_client, is_simulator_mode
 # Configuration (easy to edit)
 # ---------------------------
 
-COM_PORT = "COM3"          # Windows COM port, e.g. COM3
+COM_PORT = "/dev/ttyACM0"  # Linux COM port, "/dev/ttyACM0"
 BAUDRATE = 9600            # e.g. 9600
 PARITY = "N"               # "N", "E", "O"
 STOPBITS = 1               # 1 or 2
