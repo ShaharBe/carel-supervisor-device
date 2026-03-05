@@ -1,0 +1,13 @@
+[Unit]
+Description=Carel Supervisor
+After=network.target
+
+[Service]
+User=pi
+WorkingDirectory=/opt/carel-supervisor/app
+ExecStart=/opt/carel-supervisor/venv/bin/python app.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
