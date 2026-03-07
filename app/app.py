@@ -98,34 +98,48 @@ def modbus_connect_or_raise() -> None:
     if not client.connect():
         raise RuntimeError(f"Failed to connect Modbus serial on {COM_PORT} @ {BAUDRATE}")
 
+def read_holding_registers(address: int, count: int):
+  """Support both current pymodbus (`device_id`) and older/simulated (`slave`) clients."""
+  try:
+    return client.read_holding_registers(address=address, count=count, device_id=SLAVE_ID)
+  except TypeError:
+    return client.read_holding_registers(address=address, count=count, slave=SLAVE_ID)
+
+def write_register(address: int, value: int):
+  """Support both current pymodbus (`device_id`) and older/simulated (`slave`) clients."""
+  try:
+    return client.write_register(address=address, value=value, device_id=SLAVE_ID)
+  except TypeError:
+    return client.write_register(address=address, value=value, slave=SLAVE_ID)
+
 def poll_registers_once() -> None:
-    """Read temperature and setpoint holding registers, update cache."""
-    try:
-        with modbus_lock:
-            modbus_connect_or_raise()
-            temp_rr = client.read_holding_registers(address=TEMP_ADDR, count=1, slave=SLAVE_ID)
-            sp_rr = client.read_holding_registers(address=SETPOINT_ADDR, count=1, slave=SLAVE_ID)
+  """Read temperature and setpoint holding registers, update cache."""
+  try:
+    with modbus_lock:
+      modbus_connect_or_raise()
+      temp_rr = read_holding_registers(address=TEMP_ADDR, count=1)
+      sp_rr = read_holding_registers(address=SETPOINT_ADDR, count=1)
 
-        if temp_rr.isError():
-            raise RuntimeError(f"Modbus read error (temp): {temp_rr}")
-        if sp_rr.isError():
-            raise RuntimeError(f"Modbus read error (setpoint): {sp_rr}")
+    if temp_rr.isError():
+      raise RuntimeError(f"Modbus read error (temp): {temp_rr}")
+    if sp_rr.isError():
+      raise RuntimeError(f"Modbus read error (setpoint): {sp_rr}")
 
-        temp_raw = int(temp_rr.registers[0])
-        temp_c = temp_raw / TEMP_SCALE
-        sp_raw = int(sp_rr.registers[0])
-        sp_c = sp_raw / SETPOINT_SCALE
+    temp_raw = int(temp_rr.registers[0])
+    temp_c = temp_raw / TEMP_SCALE
+    sp_raw = int(sp_rr.registers[0])
+    sp_c = sp_raw / SETPOINT_SCALE
 
-        with cache_lock:
-            cache.temp_raw = temp_raw
-            cache.temp_c = temp_c
-            cache.last_setpoint_raw = sp_raw
-            cache.last_setpoint_c = sp_c
-            cache.last_update_utc = now_iso()
-            cache.last_error = None
-    except Exception as e:
-        with cache_lock:
-            cache.last_error = str(e)
+    with cache_lock:
+      cache.temp_raw = temp_raw
+      cache.temp_c = temp_c
+      cache.last_setpoint_raw = sp_raw
+      cache.last_setpoint_c = sp_c
+      cache.last_update_utc = now_iso()
+      cache.last_error = None
+  except Exception as e:
+    with cache_lock:
+      cache.last_error = str(e)
 
 def poller_loop(stop_evt: threading.Event) -> None:
     while not stop_evt.is_set():
@@ -327,10 +341,10 @@ def api_setpoint():
             raise ValueError("scaled value out of 16-bit range")
 
         with modbus_lock:
-            modbus_connect_or_raise()
-            wr = client.write_register(address=SETPOINT_ADDR, value=sp_raw, slave=SLAVE_ID)
+          modbus_connect_or_raise()
+          wr = write_register(address=SETPOINT_ADDR, value=sp_raw)
         if wr.isError():
-            raise RuntimeError(f"Modbus write error: {wr}")
+          raise RuntimeError(f"Modbus write error: {wr}")
 
         with cache_lock:
             cache.last_write_utc = now_iso()

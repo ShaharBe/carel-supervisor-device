@@ -64,7 +64,13 @@ class SimulatorClient:
         self._connected = False
         print("[SIMULATOR] Disconnected (simulated)")
 
-    def read_holding_registers(self, address: int, count: int = 1, slave: int = 1) -> SimulatedResponse:
+    def read_holding_registers(
+        self,
+        address: int,
+        count: int = 1,
+        slave: int = 1,
+        device_id: Optional[int] = None,
+    ) -> SimulatedResponse:
         """Read holding registers from simulated memory."""
         if not self._connected:
             return SimulatedResponse(_is_error=True, _error_msg="Not connected")
@@ -76,7 +82,13 @@ class SimulatorClient:
         print(f"[SIMULATOR] Read holding registers {address}-{address+count-1}: {values}")
         return SimulatedResponse(registers=values)
 
-    def read_input_registers(self, address: int, count: int = 1, slave: int = 1) -> SimulatedResponse:
+    def read_input_registers(
+        self,
+        address: int,
+        count: int = 1,
+        slave: int = 1,
+        device_id: Optional[int] = None,
+    ) -> SimulatedResponse:
         """Read input registers from simulated memory."""
         if not self._connected:
             return SimulatedResponse(_is_error=True, _error_msg="Not connected")
@@ -88,7 +100,13 @@ class SimulatorClient:
         print(f"[SIMULATOR] Read input registers {address}-{address+count-1}: {values}")
         return SimulatedResponse(registers=values)
 
-    def write_register(self, address: int, value: int, slave: int = 1) -> SimulatedResponse:
+    def write_register(
+        self,
+        address: int,
+        value: int,
+        slave: int = 1,
+        device_id: Optional[int] = None,
+    ) -> SimulatedResponse:
         """Write a single holding register to simulated memory."""
         if not self._connected:
             return SimulatedResponse(_is_error=True, _error_msg="Not connected")
@@ -97,7 +115,13 @@ class SimulatorClient:
         print(f"[SIMULATOR] Write register {address} = {value}")
         return SimulatedResponse(registers=[value])
 
-    def write_registers(self, address: int, values: List[int], slave: int = 1) -> SimulatedResponse:
+    def write_registers(
+        self,
+        address: int,
+        values: List[int],
+        slave: int = 1,
+        device_id: Optional[int] = None,
+    ) -> SimulatedResponse:
         """Write multiple holding registers to simulated memory."""
         if not self._connected:
             return SimulatedResponse(_is_error=True, _error_msg="Not connected")
