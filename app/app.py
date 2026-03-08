@@ -14,11 +14,14 @@ Then open:
 
 from __future__ import annotations
 
+import glob
+import os
+import subprocess
 import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, cast
 
 from flask import Flask, jsonify, request, Response
 
@@ -35,6 +38,9 @@ PARITY = "N"               # "N", "E", "O"
 STOPBITS = 1               # 1 or 2
 BYTESIZE = 8               # usually 8
 SLAVE_ID = 1               # Modbus slave address
+USB_VENDOR_ID = "1a86"     # QinHeng Electronics
+USB_MODEL_ID = "55d3"      # USB Single Serial
+USB_SERIAL_SHORT = "586D012821"
 
 # QModMaster-style 1-based register numbers (as you see in your tool)
 TEMP_REG = 2               # You said: "main temp (addr 1)" earlier, but later confirmed reg 2=249 -> 24.9C
@@ -46,6 +52,19 @@ POLL_INTERVAL_S = 1.0      # temperature polling period
 # Scaling
 TEMP_SCALE = 10.0          # 249 -> 24.9
 SETPOINT_SCALE = 10.0      # assume same scaling for setpoint (common on Carel)
+
+
+def build_modbus_client(port: str):
+  """Create a Modbus client bound to the provided serial port."""
+  return create_modbus_client(
+    port=port,
+    baudrate=BAUDRATE,
+    parity=PARITY,
+    stopbits=STOPBITS,
+    bytesize=BYTESIZE,
+    timeout=1.0,
+    retries=1,
+  )
 
 
 # ---------------------------
@@ -77,40 +96,163 @@ modbus_lock = threading.Lock()
 
 # Create Modbus client (single owner)
 # Toggle between real HW and simulator with USE_SIMULATOR=1 env var
-client = create_modbus_client(
-    port=COM_PORT,
-    baudrate=BAUDRATE,
-    parity=PARITY,
-    stopbits=STOPBITS,
-    bytesize=BYTESIZE,
-    timeout=1.0,   # seconds
-    retries=1,
-)
+active_com_port = COM_PORT
+client = build_modbus_client(active_com_port)
 
 TEMP_ADDR = qmm_to_modbus_addr(TEMP_REG)
 SETPOINT_ADDR = qmm_to_modbus_addr(SETPOINT_REG)
 
 
+def available_serial_ports() -> list[str]:
+  """Return serial device candidates that commonly host USB RS485 adapters."""
+  return sorted(set(glob.glob("/dev/ttyACM*") + glob.glob("/dev/ttyUSB*")))
+
+
+def read_udev_properties(port: str) -> Dict[str, str]:
+  """Read udev properties for a tty device on Linux."""
+  try:
+    result = subprocess.run(
+      ["udevadm", "info", "-q", "property", "-n", port],
+      check=True,
+      capture_output=True,
+      text=True,
+    )
+  except (FileNotFoundError, subprocess.CalledProcessError):
+    return {}
+
+  props: Dict[str, str] = {}
+  for line in result.stdout.splitlines():
+    if "=" not in line:
+      continue
+    key, value = line.split("=", 1)
+    props[key] = value
+  return props
+
+
+def is_target_adapter(port: str) -> bool:
+  """Return True when the tty belongs to the expected RS485 USB adapter."""
+  props = read_udev_properties(port)
+  if not props:
+    return False
+
+  vendor_ok = props.get("ID_VENDOR_ID") == USB_VENDOR_ID
+  model_ok = props.get("ID_MODEL_ID") == USB_MODEL_ID
+  serial_ok = props.get("ID_SERIAL_SHORT") == USB_SERIAL_SHORT
+  return vendor_ok and model_ok and serial_ok
+
+
+def detect_modbus_port() -> Optional[str]:
+  """Find the tty device that belongs to the expected USB RS485 adapter."""
+  if is_simulator_mode():
+    return COM_PORT
+
+  ports = available_serial_ports()
+  if os.path.exists(COM_PORT) and is_target_adapter(COM_PORT):
+    return COM_PORT
+
+  for port in ports:
+    if is_target_adapter(port):
+      return port
+
+  if not ports:
+    return None
+
+  # Fallback keeps the service usable if udevadm is unavailable unexpectedly.
+  return ports[0]
+
+
+def adapter_identity_text() -> str:
+  return (
+    f"vendor={USB_VENDOR_ID}, product={USB_MODEL_ID}, serial={USB_SERIAL_SHORT}"
+  )
+
+
+def available_matching_ports() -> list[str]:
+  return [port for port in available_serial_ports() if is_target_adapter(port)]
+
+
+def serial_port_hint() -> str:
+  """Return a user-facing message for a missing or detached RS485 adapter."""
+  available_ports = available_matching_ports()
+  message = (
+    "The expected RS485 USB adapter is currently unavailable. "
+    f"Expected adapter identity: {adapter_identity_text()}. "
+    "Check that the USB-to-RS485 cable is connected securely and recognized by the OS."
+  )
+  if available_ports:
+    message += f" Detected serial ports: {', '.join(available_ports)}."
+  return message
+
+
+def reset_modbus_client() -> None:
+  """Close the current client so the next poll can establish a fresh connection."""
+  try:
+    client.close()
+  except Exception:
+    pass
+
+
+def ensure_modbus_client_port(port: str) -> None:
+  """Recreate the client when the adapter reappears on a different device path."""
+  global client, active_com_port
+  if port == active_com_port:
+    return
+  reset_modbus_client()
+  print(f"[MODBUS] Switching serial port from {active_com_port} to {port}")
+  client = build_modbus_client(port)
+  active_com_port = port
+
+
+def normalize_modbus_error(exc: Exception) -> str:
+  """Translate low-level serial failures into a stable user-facing message."""
+  if is_simulator_mode():
+    return str(exc)
+
+  error_text = str(exc).lower()
+  serial_error_signals = (
+    "no such file",
+    "could not open port",
+    "input/output error",
+    "returned no data",
+    "device disconnected",
+    "device reports readiness",
+  )
+
+  if active_com_port not in available_serial_ports() or any(signal in error_text for signal in serial_error_signals):
+    return serial_port_hint()
+  return str(exc)
+
+
 def modbus_connect_or_raise() -> None:
-    """Ensure client is connected, raise RuntimeError if not."""
-    if client.connected:
-        return
-    if not client.connect():
-        raise RuntimeError(f"Failed to connect Modbus serial on {COM_PORT} @ {BAUDRATE}")
+  """Ensure client is connected, raise RuntimeError if not."""
+  resolved_port = detect_modbus_port()
+  if resolved_port is None:
+    reset_modbus_client()
+    raise RuntimeError(serial_port_hint())
+
+  ensure_modbus_client_port(resolved_port)
+  if client.connected:
+    return
+
+  if not client.connect():
+    reset_modbus_client()
+    raise RuntimeError(f"Failed to connect Modbus serial on {active_com_port} @ {BAUDRATE}")
 
 def read_holding_registers(address: int, count: int):
   """Support both current pymodbus (`device_id`) and older/simulated (`slave`) clients."""
+  reader = cast(Any, client.read_holding_registers)
   try:
-    return client.read_holding_registers(address=address, count=count, device_id=SLAVE_ID)
+    return reader(address=address, count=count, device_id=SLAVE_ID)
   except TypeError:
-    return client.read_holding_registers(address=address, count=count, slave=SLAVE_ID)
+    return reader(address=address, count=count, slave=SLAVE_ID)
 
 def write_register(address: int, value: int):
   """Support both current pymodbus (`device_id`) and older/simulated (`slave`) clients."""
+  writer = cast(Any, client.write_register)
   try:
-    return client.write_register(address=address, value=value, device_id=SLAVE_ID)
+    return writer(address=address, value=value, device_id=SLAVE_ID)
   except TypeError:
-    return client.write_register(address=address, value=value, slave=SLAVE_ID)
+    return writer(address=address, value=value, slave=SLAVE_ID)
 
 def poll_registers_once() -> None:
   """Read temperature and setpoint holding registers, update cache."""
@@ -124,6 +266,10 @@ def poll_registers_once() -> None:
       raise RuntimeError(f"Modbus read error (temp): {temp_rr}")
     if sp_rr.isError():
       raise RuntimeError(f"Modbus read error (setpoint): {sp_rr}")
+    if not temp_rr.registers:
+      raise RuntimeError("Modbus read returned no temperature registers")
+    if not sp_rr.registers:
+      raise RuntimeError("Modbus read returned no setpoint registers")
 
     temp_raw = int(temp_rr.registers[0])
     temp_c = temp_raw / TEMP_SCALE
@@ -138,8 +284,9 @@ def poll_registers_once() -> None:
       cache.last_update_utc = now_iso()
       cache.last_error = None
   except Exception as e:
+    reset_modbus_client()
     with cache_lock:
-      cache.last_error = str(e)
+      cache.last_error = normalize_modbus_error(e)
 
 def poller_loop(stop_evt: threading.Event) -> None:
     while not stop_evt.is_set():
@@ -311,7 +458,10 @@ def api_temp():
     resp: Dict[str, Any] = {
         "ok": bool(ok),
         "config": {
-            "com_port": COM_PORT,
+          "com_port": active_com_port,
+          "adapter_vendor_id": USB_VENDOR_ID,
+          "adapter_model_id": USB_MODEL_ID,
+          "adapter_serial_short": USB_SERIAL_SHORT,
             "baudrate": BAUDRATE,
             "slave_id": SLAVE_ID,
             "temp_reg_qmm": TEMP_REG,
@@ -354,9 +504,10 @@ def api_setpoint():
 
         return jsonify({"ok": True, "temp_c": cache.last_setpoint_c, "raw": cache.last_setpoint_raw})
     except Exception as e:
+        reset_modbus_client()
         with cache_lock:
-            cache.last_error = str(e)
-        return jsonify({"ok": False, "error": str(e)}), 400
+          cache.last_error = normalize_modbus_error(e)
+        return jsonify({"ok": False, "error": cache.last_error}), 400
 
 
 def start_background_poller() -> None:
@@ -366,7 +517,6 @@ def start_background_poller() -> None:
 
 # Start poller when module loads (works with both `python app.py` and `flask run`)
 # Guard against Flask's reloader which spawns two processes - only run in the worker
-import os
 if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or os.environ.get('FLASK_DEBUG') != '1':
     start_background_poller()
 
