@@ -14,13 +14,16 @@ Then open:
 
 from __future__ import annotations
 
+import logging
 import glob
 import os
 import subprocess
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from logging.handlers import RotatingFileHandler
 from typing import Optional, Dict, Any, cast
 
 from flask import Flask, jsonify, request, Response
@@ -52,6 +55,43 @@ POLL_INTERVAL_S = 1.0      # temperature polling period
 # Scaling
 TEMP_SCALE = 10.0          # 249 -> 24.9
 SETPOINT_SCALE = 10.0      # assume same scaling for setpoint (common on Carel)
+LOG_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "logs"))
+LOG_FILE = os.path.join(LOG_DIR, "app.log")
+LOG_MAX_BYTES = 512 * 1024
+LOG_BACKUP_COUNT = 3
+
+
+def setup_logging() -> logging.Logger:
+  """Configure a small app logger for journald and a rotating file."""
+  os.makedirs(LOG_DIR, exist_ok=True)
+
+  logger = logging.getLogger("carel_supervisor")
+  if logger.handlers:
+    return logger
+
+  logger.setLevel(logging.INFO)
+  formatter = logging.Formatter(
+    "%(asctime)s %(levelname)s %(message)s",
+    "%Y-%m-%d %H:%M:%S",
+  )
+
+  stream_handler = logging.StreamHandler()
+  stream_handler.setFormatter(formatter)
+
+  file_handler = RotatingFileHandler(
+    LOG_FILE,
+    maxBytes=LOG_MAX_BYTES,
+    backupCount=LOG_BACKUP_COUNT,
+    encoding="utf-8",
+  )
+  file_handler.setFormatter(formatter)
+
+  logger.addHandler(stream_handler)
+  logger.addHandler(file_handler)
+  logger.propagate = False
+
+  logging.getLogger("werkzeug").setLevel(logging.WARNING)
+  return logger
 
 
 def build_modbus_client(port: str):
@@ -93,6 +133,12 @@ class Cache:
 cache = Cache()
 cache_lock = threading.Lock()
 modbus_lock = threading.Lock()
+runtime_state_lock = threading.Lock()
+logger = setup_logging()
+last_detected_port: Optional[str] = None
+last_adapter_missing = False
+last_connected_port: Optional[str] = None
+last_runtime_error: Optional[str] = None
 
 # Create Modbus client (single owner)
 # Toggle between real HW and simulator with USE_SIMULATOR=1 env var
@@ -106,6 +152,59 @@ SETPOINT_ADDR = qmm_to_modbus_addr(SETPOINT_REG)
 def available_serial_ports() -> list[str]:
   """Return serial device candidates that commonly host USB RS485 adapters."""
   return sorted(set(glob.glob("/dev/ttyACM*") + glob.glob("/dev/ttyUSB*")))
+
+
+def note_adapter_detected(port: str) -> None:
+  global last_detected_port, last_adapter_missing
+  with runtime_state_lock:
+    if last_detected_port != port or last_adapter_missing:
+      logger.info("RS485 adapter detected on %s (%s)", port, adapter_identity_text())
+    last_detected_port = port
+    last_adapter_missing = False
+
+
+def note_adapter_missing() -> None:
+  global last_detected_port, last_adapter_missing, last_connected_port
+  with runtime_state_lock:
+    if not last_adapter_missing:
+      logger.warning("RS485 adapter unavailable (%s)", adapter_identity_text())
+    last_detected_port = None
+    last_connected_port = None
+    last_adapter_missing = True
+
+
+def note_client_connected(port: str) -> None:
+  global last_connected_port
+  with runtime_state_lock:
+    if last_connected_port != port:
+      logger.info("Modbus client connected on %s", port)
+    last_connected_port = port
+
+
+def note_runtime_error(message: str) -> None:
+  global last_runtime_error
+  with runtime_state_lock:
+    if last_runtime_error != message:
+      logger.warning("%s", message)
+    last_runtime_error = message
+
+
+def clear_runtime_error() -> None:
+  global last_runtime_error
+  with runtime_state_lock:
+    if last_runtime_error is not None:
+      logger.info("Modbus communication recovered on %s", active_com_port)
+    last_runtime_error = None
+
+
+def read_log_tail(limit: int = 200) -> str:
+  """Return the last log lines for browser viewing."""
+  if not os.path.exists(LOG_FILE):
+    return "Log file not created yet."
+
+  safe_limit = max(1, min(limit, 1000))
+  with open(LOG_FILE, "r", encoding="utf-8", errors="replace") as handle:
+    return "".join(deque(handle, maxlen=safe_limit))
 
 
 def read_udev_properties(port: str) -> Dict[str, str]:
@@ -148,16 +247,20 @@ def detect_modbus_port() -> Optional[str]:
 
   ports = available_serial_ports()
   if os.path.exists(COM_PORT) and is_target_adapter(COM_PORT):
+    note_adapter_detected(COM_PORT)
     return COM_PORT
 
   for port in ports:
     if is_target_adapter(port):
+      note_adapter_detected(port)
       return port
 
   if not ports:
+    note_adapter_missing()
     return None
 
   # Fallback keeps the service usable if udevadm is unavailable unexpectedly.
+  note_adapter_detected(ports[0])
   return ports[0]
 
 
@@ -198,7 +301,7 @@ def ensure_modbus_client_port(port: str) -> None:
   if port == active_com_port:
     return
   reset_modbus_client()
-  print(f"[MODBUS] Switching serial port from {active_com_port} to {port}")
+  logger.info("Switching serial port from %s to %s", active_com_port, port)
   client = build_modbus_client(port)
   active_com_port = port
 
@@ -237,6 +340,7 @@ def modbus_connect_or_raise() -> None:
   if not client.connect():
     reset_modbus_client()
     raise RuntimeError(f"Failed to connect Modbus serial on {active_com_port} @ {BAUDRATE}")
+  note_client_connected(active_com_port)
 
 def read_holding_registers(address: int, count: int):
   """Support both current pymodbus (`device_id`) and older/simulated (`slave`) clients."""
@@ -283,10 +387,13 @@ def poll_registers_once() -> None:
       cache.last_setpoint_c = sp_c
       cache.last_update_utc = now_iso()
       cache.last_error = None
+    clear_runtime_error()
   except Exception as e:
     reset_modbus_client()
+    error_message = normalize_modbus_error(e)
+    note_runtime_error(error_message)
     with cache_lock:
-      cache.last_error = normalize_modbus_error(e)
+      cache.last_error = error_message
 
 def poller_loop(stop_evt: threading.Event) -> None:
     while not stop_evt.is_set():
@@ -317,6 +424,7 @@ INDEX_HTML = """
     label { display: inline-block; width: 180px; }
     input { padding: 6px 8px; width: 120px; }
     button { padding: 7px 12px; cursor: pointer; }
+    .button-link { display: inline-block; padding: 7px 12px; border: 1px solid #bbb; border-radius: 8px; color: #111; text-decoration: none; }
     .muted { color: #666; font-size: 0.92em; }
     .err { color: #b00020; }
     .ok { color: #0b6b0b; }
@@ -330,6 +438,7 @@ INDEX_HTML = """
       label { display: block; width: 100%; margin-bottom: 6px; font-weight: 500; }
       input { width: calc(100% - 80px); padding: 10px 12px; font-size: 16px; /* prevents iOS zoom */ }
       button { padding: 10px 16px; font-size: 16px; }
+      .button-link { padding: 10px 16px; font-size: 16px; }
       h2 { font-size: 1.4em; }
       .config-info { display: none; } /* hide technical details on phone */
     }
@@ -370,6 +479,11 @@ INDEX_HTML = """
     <div class="row">
       <label>Current setpoint:</label>
       <span id="lsp">—</span>
+    </div>
+
+    <div class="row">
+      <label>Diagnostics:</label>
+      <a class="button-link" href="/logs" target="_blank" rel="noopener">Open Log</a>
     </div>
 
     <div class="row muted config-info">
@@ -441,6 +555,12 @@ INDEX_HTML = """
 def index() -> Response:
     return Response(INDEX_HTML, mimetype="text/html")
 
+
+@app.route("/logs", methods=["GET"])
+def view_logs() -> Response:
+  limit = request.args.get("tail", default=200, type=int) or 200
+  return Response(read_log_tail(limit), mimetype="text/plain")
+
 @app.route("/api/temp", methods=["GET"])
 def api_temp():
     with cache_lock:
@@ -501,12 +621,16 @@ def api_setpoint():
             cache.last_setpoint_raw = sp_raw
             cache.last_setpoint_c = sp_raw / SETPOINT_SCALE
             cache.last_error = None
+        logger.info("Setpoint written successfully: %.1f C on %s", sp_c, active_com_port)
+        clear_runtime_error()
 
         return jsonify({"ok": True, "temp_c": cache.last_setpoint_c, "raw": cache.last_setpoint_raw})
     except Exception as e:
         reset_modbus_client()
+        error_message = normalize_modbus_error(e)
+        note_runtime_error(error_message)
         with cache_lock:
-          cache.last_error = normalize_modbus_error(e)
+          cache.last_error = error_message
         return jsonify({"ok": False, "error": cache.last_error}), 400
 
 
@@ -522,6 +646,9 @@ if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or os.environ.get('FLASK_DEBUG'
 
 
 def main() -> None:
+    logger.info("Carel Supervisor starting")
+    logger.info("Expected adapter identity: %s", adapter_identity_text())
+
     # Preflight read (optional) so you see something quickly
     time.sleep(0.2)
     poll_registers_once()
@@ -531,8 +658,9 @@ def main() -> None:
     #   pip install waitress
     #   waitress-serve --listen=0.0.0.0:8000 app:app
     # app.run(host="0.0.0.0", port=8000, debug=False, threaded=True)
-    # app.run(host="10.8.0.2", port=5000, debug=False, threaded=True)   
-    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True) 
+    # app.run(host="10.8.0.2", port=5000, debug=False, threaded=True)
+    logger.info("Flask server starting on 0.0.0.0:5000")
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)
 
 
 if __name__ == "__main__":
