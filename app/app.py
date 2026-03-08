@@ -49,6 +49,24 @@ USB_SERIAL_SHORT = "586D012821"
 TEMP_REG = 2               # You said: "main temp (addr 1)" earlier, but later confirmed reg 2=249 -> 24.9C
                            # Put the exact register number you read temp from in QModMaster here.
 SETPOINT_REG = 20          # Setpoint register (QModMaster-style)
+RTC_READ_HOUR_REG = 154
+RTC_READ_MINUTE_REG = 155
+RTC_READ_DAY_REG = 156
+RTC_READ_MONTH_REG = 157
+RTC_READ_YEAR_REG = 158
+RTC_READ_WEEKDAY_REG = 159
+RTC_ENABLE_HOUR_BIT = 1
+RTC_ENABLE_MINUTE_BIT = 2
+RTC_ENABLE_DAY_BIT = 3
+RTC_ENABLE_MONTH_BIT = 4
+RTC_ENABLE_YEAR_BIT = 5
+RTC_ENABLE_WEEKDAY_BIT = 6
+RTC_WRITE_WEEKDAY_REG = 159
+RTC_WRITE_HOUR_REG = 160
+RTC_WRITE_MINUTE_REG = 161
+RTC_WRITE_DAY_REG = 162
+RTC_WRITE_MONTH_REG = 163
+RTC_WRITE_YEAR_REG = 164
 
 POLL_INTERVAL_S = 1.0      # temperature polling period
 
@@ -129,6 +147,13 @@ class Cache:
     last_write_utc: Optional[str] = None
     last_setpoint_raw: Optional[int] = None
     last_setpoint_c: Optional[float] = None
+    device_time_iso_local: Optional[str] = None
+    device_time_display: Optional[str] = None
+    device_time_weekday: Optional[int] = None
+    device_time_raw_year: Optional[int] = None
+    last_rtc_update_utc: Optional[str] = None
+    last_rtc_write_utc: Optional[str] = None
+    rtc_error: Optional[str] = None
 
 cache = Cache()
 cache_lock = threading.Lock()
@@ -147,6 +172,13 @@ client = build_modbus_client(active_com_port)
 
 TEMP_ADDR = qmm_to_modbus_addr(TEMP_REG)
 SETPOINT_ADDR = qmm_to_modbus_addr(SETPOINT_REG)
+RTC_READ_START_ADDR = qmm_to_modbus_addr(RTC_READ_HOUR_REG)
+RTC_READ_COUNT = 6
+RTC_ENABLE_START_ADDR = qmm_to_modbus_addr(RTC_ENABLE_HOUR_BIT)
+RTC_ENABLE_COUNT = 6
+RTC_WRITE_START_ADDR = qmm_to_modbus_addr(RTC_WRITE_WEEKDAY_REG)
+RTC_WRITE_COUNT = 6
+RTC_LATCH_PULSE_DELAY_S = 0.15
 
 
 def available_serial_ports() -> list[str]:
@@ -342,6 +374,56 @@ def modbus_connect_or_raise() -> None:
     raise RuntimeError(f"Failed to connect Modbus serial on {active_com_port} @ {BAUDRATE}")
   note_client_connected(active_com_port)
 
+
+def normalize_device_year(raw_year: int) -> int:
+  """Convert device year register into a 4-digit year when needed."""
+  if 0 <= raw_year <= 99:
+    return 2000 + raw_year
+  return raw_year
+
+
+def encode_device_year(target_year: int, current_raw_year: Optional[int]) -> int:
+  """Write the year back using the same 2-digit/4-digit shape already reported by the device."""
+  if current_raw_year is not None and 0 <= current_raw_year <= 99:
+    return target_year % 100
+  return target_year
+
+
+def build_device_datetime(hour: int, minute: int, day: int, month: int, raw_year: int) -> datetime:
+  """Build a Python datetime from device RTC register values."""
+  return datetime(normalize_device_year(raw_year), month, day, hour, minute)
+
+
+def format_device_datetime_local(value: datetime) -> str:
+  return value.strftime("%Y-%m-%dT%H:%M")
+
+
+def write_registers(address: int, values: list[int]):
+  """Support both current pymodbus (`device_id`) and older/simulated (`slave`) clients."""
+  writer = cast(Any, client.write_registers)
+  try:
+    return writer(address=address, values=values, device_id=SLAVE_ID)
+  except TypeError:
+    return writer(address=address, values=values, slave=SLAVE_ID)
+
+
+def read_coils(address: int, count: int):
+  """Support both current pymodbus (`device_id`) and older/simulated (`slave`) clients."""
+  reader = cast(Any, client).read_coils
+  try:
+    return reader(address=address, count=count, device_id=SLAVE_ID)
+  except TypeError:
+    return reader(address=address, count=count, slave=SLAVE_ID)
+
+
+def write_coil(address: int, value: bool):
+  """Support both current pymodbus (`device_id`) and older/simulated (`slave`) clients."""
+  writer = cast(Any, client).write_coil
+  try:
+    return writer(address=address, value=value, device_id=SLAVE_ID)
+  except TypeError:
+    return writer(address=address, value=value, slave=SLAVE_ID)
+
 def read_holding_registers(address: int, count: int):
   """Support both current pymodbus (`device_id`) and older/simulated (`slave`) clients."""
   reader = cast(Any, client.read_holding_registers)
@@ -358,8 +440,78 @@ def write_register(address: int, value: int):
   except TypeError:
     return writer(address=address, value=value, slave=SLAVE_ID)
 
+
+def read_device_rtc_values() -> tuple[datetime, int, int]:
+  """Read the device RTC block and return the parsed datetime plus raw year/weekday."""
+  rtc_rr = read_holding_registers(address=RTC_READ_START_ADDR, count=RTC_READ_COUNT)
+  if rtc_rr.isError():
+    raise RuntimeError(f"Modbus read error (device time): {rtc_rr}")
+  if not rtc_rr.registers or len(rtc_rr.registers) < RTC_READ_COUNT:
+    raise RuntimeError("Modbus read returned incomplete device time registers")
+
+  hour = int(rtc_rr.registers[0])
+  minute = int(rtc_rr.registers[1])
+  day = int(rtc_rr.registers[2])
+  month = int(rtc_rr.registers[3])
+  raw_year = int(rtc_rr.registers[4])
+  weekday = int(rtc_rr.registers[5])
+  return build_device_datetime(hour, minute, day, month, raw_year), raw_year, weekday
+
+
+def write_device_rtc_values(value: datetime, current_raw_year: Optional[int]):
+  """Write the editable CAREL RTC block in weekday,hour,minute,day,month,year order."""
+  write_values = [
+    value.weekday(),
+    value.hour,
+    value.minute,
+    value.day,
+    value.month,
+    encode_device_year(value.year, current_raw_year),
+  ]
+  return write_registers(address=RTC_WRITE_START_ADDR, values=write_values)
+
+
+def set_rtc_edit_latches(value: bool) -> None:
+  """Drive all RTC edit latch bits to a known state."""
+  if is_simulator_mode():
+    return
+
+  for index in range(RTC_ENABLE_COUNT):
+    wr = write_coil(address=RTC_ENABLE_START_ADDR + index, value=value)
+    if wr.isError():
+      state = "set" if value else "clear"
+      raise RuntimeError(f"Modbus write error ({state} rtc latch D{index + 1}): {wr}")
+
+def pulse_rtc_edit_latches() -> None:
+  """Commit the prepared RTC shadow registers by pulsing D1..D6 one at a time."""
+  if is_simulator_mode():
+    return
+
+  for index in range(RTC_ENABLE_COUNT):
+    wr = write_coil(address=RTC_ENABLE_START_ADDR + index, value=True)
+    if wr.isError():
+      raise RuntimeError(f"Modbus write error (set rtc latch D{index + 1}): {wr}")
+    time.sleep(RTC_LATCH_PULSE_DELAY_S)
+    wr = write_coil(address=RTC_ENABLE_START_ADDR + index, value=False)
+    if wr.isError():
+      raise RuntimeError(f"Modbus write error (clear rtc latch D{index + 1}): {wr}")
+
+def write_device_rtc(value: datetime, current_raw_year: Optional[int]) -> None:
+  """Write RTC shadow registers, then pulse the D latches to commit them."""
+  set_rtc_edit_latches(False)
+  wr = write_device_rtc_values(value, current_raw_year)
+  if wr.isError():
+    raise RuntimeError(f"Modbus write error (device time shadow): {wr}")
+  pulse_rtc_edit_latches()
+  set_rtc_edit_latches(False)
+
+  logger.info(
+    "Wrote RTC shadow block and pulsed D1..D6 latches for %s",
+    format_device_datetime_local(value),
+  )
+
 def poll_registers_once() -> None:
-  """Read temperature and setpoint holding registers, update cache."""
+  """Read temperature, setpoint, and device RTC registers, update cache."""
   try:
     with modbus_lock:
       modbus_connect_or_raise()
@@ -395,6 +547,24 @@ def poll_registers_once() -> None:
     with cache_lock:
       cache.last_error = error_message
 
+  try:
+    with modbus_lock:
+      modbus_connect_or_raise()
+      device_time, raw_year, weekday = read_device_rtc_values()
+
+    with cache_lock:
+      cache.device_time_iso_local = format_device_datetime_local(device_time)
+      cache.device_time_display = device_time.strftime("%Y-%m-%d %H:%M")
+      cache.device_time_weekday = weekday
+      cache.device_time_raw_year = raw_year
+      cache.last_rtc_update_utc = now_iso()
+      cache.rtc_error = None
+  except Exception as e:
+    reset_modbus_client()
+    error_message = normalize_modbus_error(e)
+    with cache_lock:
+      cache.rtc_error = error_message
+
 def poller_loop(stop_evt: threading.Event) -> None:
     while not stop_evt.is_set():
         poll_registers_once()
@@ -421,14 +591,25 @@ INDEX_HTML = """
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 28px; }
     .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; max-width: 520px; }
     .row { margin: 10px 0; }
+    .inline-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     label { display: inline-block; width: 180px; }
     input { padding: 6px 8px; width: 120px; }
     button { padding: 7px 12px; cursor: pointer; }
+    .small-btn { padding: 5px 10px; font-size: 0.92rem; }
     .button-link { display: inline-block; padding: 7px 12px; border: 1px solid #bbb; border-radius: 8px; color: #111; text-decoration: none; }
     .muted { color: #666; font-size: 0.92em; }
     .err { color: #b00020; }
     .ok { color: #0b6b0b; }
     code { background: #f6f6f6; padding: 2px 6px; border-radius: 8px; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.35); display: none; align-items: center; justify-content: center; padding: 16px; }
+    .modal-backdrop.open { display: flex; }
+    .modal { background: #fff; border-radius: 14px; width: min(100%, 420px); padding: 18px; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22); }
+    .modal h3 { margin: 0 0 8px; }
+    .modal .field { margin: 12px 0; }
+    .modal .field label { display: block; width: auto; margin-bottom: 6px; font-weight: 600; }
+    .modal .field input { width: 100%; box-sizing: border-box; }
+    .modal-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+    .modal-status { min-height: 1.2em; margin-top: 10px; }
 
     /* Phone layout (max-width 600px) */
     @media (max-width: 600px) {
@@ -439,6 +620,11 @@ INDEX_HTML = """
       input { width: calc(100% - 80px); padding: 10px 12px; font-size: 16px; /* prevents iOS zoom */ }
       button { padding: 10px 16px; font-size: 16px; }
       .button-link { padding: 10px 16px; font-size: 16px; }
+      .small-btn { padding: 8px 14px; font-size: 15px; }
+      .inline-row { align-items: flex-start; }
+      .modal { width: 100%; padding: 16px; }
+      .modal-actions { flex-direction: column; }
+      .modal .field input { width: 100%; }
       h2 { font-size: 1.4em; }
       .config-info { display: none; } /* hide technical details on phone */
     }
@@ -461,6 +647,19 @@ INDEX_HTML = """
     <div class="row">
       <label>Status:</label>
       <span id="status" class="muted">—</span>
+    </div>
+
+    <div class="row">
+      <label>Device date/time:</label>
+      <span class="inline-row">
+        <span id="deviceTime">—</span>
+        <button id="editRtcBtn" class="small-btn" type="button">Edit</button>
+      </span>
+    </div>
+
+    <div class="row">
+      <label>RTC status:</label>
+      <span id="rtcStatus" class="muted">—</span>
     </div>
 
     <hr/>
@@ -492,7 +691,54 @@ INDEX_HTML = """
     </div>
   </div>
 
+  <div id="rtcModalBackdrop" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rtcModalTitle">
+      <h3 id="rtcModalTitle">Edit Device Date/Time</h3>
+      <div class="muted">Use the device local date/time shown by the controller.</div>
+
+      <div class="field">
+        <label for="rtcInput">Device date/time</label>
+        <input id="rtcInput" type="datetime-local" step="60" />
+      </div>
+
+      <div class="modal-actions">
+        <button id="useBrowserTimeBtn" type="button">Use Browser Time</button>
+        <button id="saveRtcBtn" type="button">Save</button>
+        <button id="cancelRtcBtn" type="button">Cancel</button>
+      </div>
+
+      <div id="rtcModalStatus" class="modal-status muted"></div>
+    </div>
+  </div>
+
 <script>
+  let rtcModalOpen = false;
+  let lastRtcIsoLocal = null;
+
+  function browserDateTimeLocalValue() {
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 16);
+  }
+
+  function openRtcModal() {
+    rtcModalOpen = true;
+    document.getElementById('rtcModalBackdrop').classList.add('open');
+    document.getElementById('rtcModalBackdrop').setAttribute('aria-hidden', 'false');
+    document.getElementById('rtcModalStatus').textContent = '';
+    document.getElementById('rtcModalStatus').className = 'modal-status muted';
+    if (lastRtcIsoLocal) {
+      document.getElementById('rtcInput').value = lastRtcIsoLocal;
+    }
+    document.getElementById('rtcInput').focus();
+  }
+
+  function closeRtcModal() {
+    rtcModalOpen = false;
+    document.getElementById('rtcModalBackdrop').classList.remove('open');
+    document.getElementById('rtcModalBackdrop').setAttribute('aria-hidden', 'true');
+  }
+
   async function refresh() {
     try {
       const r = await fetch('api/temp');
@@ -500,6 +746,7 @@ INDEX_HTML = """
 
       document.getElementById('tempReg').textContent = j.config.temp_reg_qmm;
       document.getElementById('spReg').textContent = j.config.setpoint_reg_qmm;
+      lastRtcIsoLocal = j.device_time_iso_local || lastRtcIsoLocal;
 
       if (j.ok) {
         document.getElementById('temp').textContent = j.temp_c.toFixed(1) + ' °C';
@@ -510,6 +757,21 @@ INDEX_HTML = """
       } else {
         document.getElementById('status').textContent = j.error || 'No data';
         document.getElementById('status').className = 'err';
+      }
+
+      if (j.device_time_display) {
+        document.getElementById('deviceTime').textContent = j.device_time_display;
+        document.getElementById('rtcStatus').textContent = j.last_rtc_write_utc
+          ? ('Last RTC write: ' + j.last_rtc_write_utc)
+          : (j.last_rtc_update_utc || 'RTC OK');
+        document.getElementById('rtcStatus').className = 'muted';
+        if (!rtcModalOpen && j.device_time_iso_local) {
+          document.getElementById('rtcInput').value = j.device_time_iso_local;
+        }
+      } else {
+        document.getElementById('deviceTime').textContent = '—';
+        document.getElementById('rtcStatus').textContent = j.rtc_error || 'No RTC data';
+        document.getElementById('rtcStatus').className = 'err';
       }
 
       // write info
@@ -524,6 +786,36 @@ INDEX_HTML = """
       document.getElementById('status').textContent = 'UI error: ' + e;
       document.getElementById('status').className = 'err';
     }
+  }
+
+  async function saveRtc() {
+    const input = document.getElementById('rtcInput');
+    const modalStatus = document.getElementById('rtcModalStatus');
+    const value = input.value;
+    if (!value) {
+      modalStatus.textContent = 'Pick a valid date/time first.';
+      modalStatus.className = 'modal-status err';
+      return;
+    }
+
+    modalStatus.textContent = 'Saving...';
+    modalStatus.className = 'modal-status muted';
+
+    const r = await fetch('api/device-datetime', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ datetime_local: value })
+    });
+    const j = await r.json();
+    if (!j.ok) {
+      modalStatus.textContent = 'Write failed: ' + (j.error || 'unknown');
+      modalStatus.className = 'modal-status err';
+      return;
+    }
+
+    lastRtcIsoLocal = j.device_time_iso_local || value;
+    closeRtcModal();
+    await refresh();
   }
 
   async function writeSetpoint() {
@@ -543,6 +835,19 @@ INDEX_HTML = """
   }
 
   document.getElementById('setBtn').addEventListener('click', writeSetpoint);
+  document.getElementById('editRtcBtn').addEventListener('click', openRtcModal);
+  document.getElementById('cancelRtcBtn').addEventListener('click', closeRtcModal);
+  document.getElementById('saveRtcBtn').addEventListener('click', saveRtc);
+  document.getElementById('useBrowserTimeBtn').addEventListener('click', () => {
+    document.getElementById('rtcInput').value = browserDateTimeLocalValue();
+    document.getElementById('rtcModalStatus').textContent = 'Browser time loaded.';
+    document.getElementById('rtcModalStatus').className = 'modal-status muted';
+  });
+  document.getElementById('rtcModalBackdrop').addEventListener('click', (event) => {
+    if (event.target.id === 'rtcModalBackdrop') {
+      closeRtcModal();
+    }
+  });
 
   refresh();
   setInterval(refresh, 1000);
@@ -572,6 +877,13 @@ def api_temp():
             "last_write_utc": cache.last_write_utc,
             "last_setpoint_raw": cache.last_setpoint_raw,
             "last_setpoint_c": cache.last_setpoint_c,
+            "device_time_iso_local": cache.device_time_iso_local,
+            "device_time_display": cache.device_time_display,
+            "device_time_weekday": cache.device_time_weekday,
+            "device_time_raw_year": cache.device_time_raw_year,
+            "last_rtc_update_utc": cache.last_rtc_update_utc,
+            "last_rtc_write_utc": cache.last_rtc_write_utc,
+            "rtc_error": cache.rtc_error,
         }
 
     ok = data["temp_c"] is not None and data["last_error"] is None
@@ -586,6 +898,22 @@ def api_temp():
             "slave_id": SLAVE_ID,
             "temp_reg_qmm": TEMP_REG,
             "setpoint_reg_qmm": SETPOINT_REG,
+            "rtc_read_regs_qmm": {
+              "hour": RTC_READ_HOUR_REG,
+              "minute": RTC_READ_MINUTE_REG,
+              "day": RTC_READ_DAY_REG,
+              "month": RTC_READ_MONTH_REG,
+              "year": RTC_READ_YEAR_REG,
+              "weekday": RTC_READ_WEEKDAY_REG,
+            },
+            "rtc_write_regs_qmm": {
+              "weekday": RTC_WRITE_WEEKDAY_REG,
+              "hour": RTC_WRITE_HOUR_REG,
+              "minute": RTC_WRITE_MINUTE_REG,
+              "day": RTC_WRITE_DAY_REG,
+              "month": RTC_WRITE_MONTH_REG,
+              "year": RTC_WRITE_YEAR_REG,
+            },
             "poll_interval_s": POLL_INTERVAL_S,
         },
         **data,
@@ -593,6 +921,54 @@ def api_temp():
     if not ok:
         resp["error"] = data["last_error"] or "No data yet"
     return jsonify(resp)
+
+
+@app.route("/api/device-datetime", methods=["POST"])
+def api_device_datetime():
+    try:
+        body = request.get_json(force=True, silent=False)
+        if not isinstance(body, dict) or "datetime_local" not in body:
+            raise ValueError("JSON must include 'datetime_local'")
+
+        raw_value = str(body["datetime_local"]).strip()
+        if not raw_value:
+            raise ValueError("datetime_local cannot be empty")
+
+        target_datetime = datetime.fromisoformat(raw_value)
+
+        with cache_lock:
+            current_raw_year = cache.device_time_raw_year
+
+        with modbus_lock:
+            modbus_connect_or_raise()
+            write_device_rtc(target_datetime, current_raw_year)
+
+            confirmed_datetime, confirmed_raw_year, confirmed_weekday = read_device_rtc_values()
+
+        with cache_lock:
+            cache.device_time_iso_local = format_device_datetime_local(confirmed_datetime)
+            cache.device_time_display = confirmed_datetime.strftime("%Y-%m-%d %H:%M")
+            cache.device_time_weekday = confirmed_weekday
+            cache.device_time_raw_year = confirmed_raw_year
+            cache.last_rtc_update_utc = now_iso()
+            cache.last_rtc_write_utc = now_iso()
+            cache.rtc_error = None
+
+        logger.info("Device RTC written successfully: %s on %s", format_device_datetime_local(target_datetime), active_com_port)
+        return jsonify({
+            "ok": True,
+            "device_time_iso_local": cache.device_time_iso_local,
+            "device_time_display": cache.device_time_display,
+            "device_time_weekday": cache.device_time_weekday,
+            "device_time_raw_year": cache.device_time_raw_year,
+            "last_rtc_write_utc": cache.last_rtc_write_utc,
+        })
+    except Exception as e:
+        reset_modbus_client()
+        error_message = normalize_modbus_error(e)
+        with cache_lock:
+            cache.rtc_error = error_message
+        return jsonify({"ok": False, "error": error_message}), 400
 
 @app.route("/api/setpoint", methods=["POST"])
 def api_setpoint():

@@ -5,6 +5,8 @@ Simulates register reads/writes in memory - no actual Modbus communication.
 Mimics the pymodbus ModbusSerialClient interface.
 """
 
+from datetime import datetime
+
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional
 
@@ -47,6 +49,20 @@ class SimulatorClient:
         self._holding_registers[1] = 249
         # Setpoint register (addr 19, 0-based) = 280 -> 28.0°C
         self._holding_registers[19] = 280
+
+        now = datetime.now()
+        self._holding_registers[152] = now.hour
+        self._holding_registers[153] = now.minute
+        self._holding_registers[154] = now.day
+        self._holding_registers[155] = now.month
+        self._holding_registers[156] = now.year % 100
+        self._holding_registers[157] = now.weekday()
+        self._holding_registers[158] = now.weekday()
+        self._holding_registers[159] = now.hour
+        self._holding_registers[160] = now.minute
+        self._holding_registers[161] = now.day
+        self._holding_registers[162] = now.month
+        self._holding_registers[163] = now.year % 100
 
     @property
     def connected(self) -> bool:
