@@ -55,18 +55,22 @@ RTC_READ_DAY_REG = 156
 RTC_READ_MONTH_REG = 157
 RTC_READ_YEAR_REG = 158
 RTC_READ_WEEKDAY_REG = 159
-RTC_ENABLE_HOUR_BIT = 1
-RTC_ENABLE_MINUTE_BIT = 2
-RTC_ENABLE_DAY_BIT = 3
-RTC_ENABLE_MONTH_BIT = 4
-RTC_ENABLE_YEAR_BIT = 5
-RTC_ENABLE_WEEKDAY_BIT = 6
-RTC_WRITE_WEEKDAY_REG = 159
-RTC_WRITE_HOUR_REG = 160
-RTC_WRITE_MINUTE_REG = 161
-RTC_WRITE_DAY_REG = 162
-RTC_WRITE_MONTH_REG = 163
-RTC_WRITE_YEAR_REG = 164
+# D-bit coil addresses (direct Modbus 0-based addresses, NOT qmm style)
+# Verified experimentally: D1=coil addr 1, D2=coil addr 2, etc.
+RTC_COIL_HOUR = 1       # D1 -> latches hour
+RTC_COIL_MINUTE = 2     # D2 -> latches minute
+RTC_COIL_DAY = 3        # D3 -> latches day
+RTC_COIL_MONTH = 4      # D4 -> latches month
+RTC_COIL_YEAR = 5       # D5 -> latches year
+RTC_COIL_WEEKDAY = 6    # D6 -> latches weekday
+# Shadow register QMM numbers (1-based) - verified experimentally:
+# addr 159=weekday, 160=hour, 161=minute, 162=day, 163=month, 164=year
+RTC_WRITE_WEEKDAY_REG = 160   # qmm 160 -> addr 159
+RTC_WRITE_HOUR_REG = 161      # qmm 161 -> addr 160
+RTC_WRITE_MINUTE_REG = 162    # qmm 162 -> addr 161
+RTC_WRITE_DAY_REG = 163       # qmm 163 -> addr 162
+RTC_WRITE_MONTH_REG = 164     # qmm 164 -> addr 163
+RTC_WRITE_YEAR_REG = 165      # qmm 165 -> addr 164
 
 POLL_INTERVAL_S = 1.0      # temperature polling period
 
@@ -174,11 +178,29 @@ TEMP_ADDR = qmm_to_modbus_addr(TEMP_REG)
 SETPOINT_ADDR = qmm_to_modbus_addr(SETPOINT_REG)
 RTC_READ_START_ADDR = qmm_to_modbus_addr(RTC_READ_HOUR_REG)
 RTC_READ_COUNT = 6
-RTC_ENABLE_START_ADDR = qmm_to_modbus_addr(RTC_ENABLE_HOUR_BIT)
-RTC_ENABLE_COUNT = 6
-RTC_WRITE_START_ADDR = qmm_to_modbus_addr(RTC_WRITE_WEEKDAY_REG)
-RTC_WRITE_COUNT = 6
+# Coil addresses are direct (not qmm converted) - already 0-indexed Modbus addresses
+RTC_COIL_START = RTC_COIL_HOUR  # = 1
+RTC_COIL_COUNT = 6
 RTC_LATCH_PULSE_DELAY_S = 0.15
+# Shadow write block: [weekday, hour, minute, day, month, year]
+RTC_WRITE_SHADOW_ADDRS = [
+    qmm_to_modbus_addr(RTC_WRITE_WEEKDAY_REG),  # addr 159
+    qmm_to_modbus_addr(RTC_WRITE_HOUR_REG),     # addr 160
+    qmm_to_modbus_addr(RTC_WRITE_MINUTE_REG),   # addr 161
+    qmm_to_modbus_addr(RTC_WRITE_DAY_REG),      # addr 162
+    qmm_to_modbus_addr(RTC_WRITE_MONTH_REG),    # addr 163
+    qmm_to_modbus_addr(RTC_WRITE_YEAR_REG),     # addr 164
+]
+# Mapping of field index to coil address for pulsing
+# Order: [weekday, hour, minute, day, month, year] -> coils [6, 1, 2, 3, 4, 5]
+RTC_FIELD_COILS = [
+    RTC_COIL_WEEKDAY,  # 6: for weekday
+    RTC_COIL_HOUR,     # 1: for hour
+    RTC_COIL_MINUTE,   # 2: for minute
+    RTC_COIL_DAY,      # 3: for day
+    RTC_COIL_MONTH,    # 4: for month
+    RTC_COIL_YEAR,     # 5: for year
+]
 
 
 def available_serial_ports() -> list[str]:
@@ -459,50 +481,61 @@ def read_device_rtc_values() -> tuple[datetime, int, int]:
 
 
 def write_device_rtc_values(value: datetime, current_raw_year: Optional[int]):
-  """Write the editable CAREL RTC block in weekday,hour,minute,day,month,year order."""
+  """Write the editable CAREL RTC shadow registers for weekday,hour,minute,day,month,year."""
+  # CAREL weekday: 1=Monday..7=Sunday; Python: 0=Monday..6=Sunday
+  carel_weekday = value.weekday() + 1
   write_values = [
-    value.weekday(),
+    carel_weekday,
     value.hour,
     value.minute,
     value.day,
     value.month,
     encode_device_year(value.year, current_raw_year),
   ]
-  return write_registers(address=RTC_WRITE_START_ADDR, values=write_values)
+  # Write each shadow register individually
+  for i, val in enumerate(write_values):
+    addr = RTC_WRITE_SHADOW_ADDRS[i]
+    wr = write_register(address=addr, value=val)
+    if wr.isError():
+      raise RuntimeError(f"Modbus write error (shadow addr {addr}={val}): {wr}")
+  return None  # Success
 
 
 def set_rtc_edit_latches(value: bool) -> None:
-  """Drive all RTC edit latch bits to a known state."""
+  """Drive all RTC edit latch bits (D1..D6) to a known state."""
   if is_simulator_mode():
     return
 
-  for index in range(RTC_ENABLE_COUNT):
-    wr = write_coil(address=RTC_ENABLE_START_ADDR + index, value=value)
+  for coil_addr in [RTC_COIL_HOUR, RTC_COIL_MINUTE, RTC_COIL_DAY, RTC_COIL_MONTH, RTC_COIL_YEAR, RTC_COIL_WEEKDAY]:
+    wr = write_coil(address=coil_addr, value=value)
     if wr.isError():
       state = "set" if value else "clear"
-      raise RuntimeError(f"Modbus write error ({state} rtc latch D{index + 1}): {wr}")
+      raise RuntimeError(f"Modbus write error ({state} coil {coil_addr}): {wr}")
 
 def pulse_rtc_edit_latches() -> None:
   """Commit the prepared RTC shadow registers by pulsing D1..D6 one at a time."""
   if is_simulator_mode():
     return
 
-  for index in range(RTC_ENABLE_COUNT):
-    wr = write_coil(address=RTC_ENABLE_START_ADDR + index, value=True)
+  # Pulse in order: hour(1), minute(2), day(3), month(4), year(5), weekday(6)
+  for coil_addr in [RTC_COIL_HOUR, RTC_COIL_MINUTE, RTC_COIL_DAY, RTC_COIL_MONTH, RTC_COIL_YEAR, RTC_COIL_WEEKDAY]:
+    wr = write_coil(address=coil_addr, value=True)
     if wr.isError():
-      raise RuntimeError(f"Modbus write error (set rtc latch D{index + 1}): {wr}")
+      raise RuntimeError(f"Modbus write error (set coil {coil_addr}): {wr}")
     time.sleep(RTC_LATCH_PULSE_DELAY_S)
-    wr = write_coil(address=RTC_ENABLE_START_ADDR + index, value=False)
+    wr = write_coil(address=coil_addr, value=False)
     if wr.isError():
-      raise RuntimeError(f"Modbus write error (clear rtc latch D{index + 1}): {wr}")
+      raise RuntimeError(f"Modbus write error (clear coil {coil_addr}): {wr}")
 
 def write_device_rtc(value: datetime, current_raw_year: Optional[int]) -> None:
   """Write RTC shadow registers, then pulse the D latches to commit them."""
+  # Clear all latches first
   set_rtc_edit_latches(False)
-  wr = write_device_rtc_values(value, current_raw_year)
-  if wr.isError():
-    raise RuntimeError(f"Modbus write error (device time shadow): {wr}")
+  # Write all shadow registers
+  write_device_rtc_values(value, current_raw_year)
+  # Pulse each latch to commit
   pulse_rtc_edit_latches()
+  # Clear latches again
   set_rtc_edit_latches(False)
 
   logger.info(
