@@ -72,6 +72,17 @@ RTC_WRITE_DAY_REG = 163       # qmm 163 -> addr 162
 RTC_WRITE_MONTH_REG = 164     # qmm 164 -> addr 163
 RTC_WRITE_YEAR_REG = 165      # qmm 165 -> addr 164
 
+# Info registers (read-only I-registers for status monitoring)
+# Block 1: I,136..I,142 (humidifier status, conductivity, cylinder phases/status)
+INFO_BLOCK1_START_REG = 136   # qmm 136 -> addr 135
+INFO_BLOCK1_COUNT = 7         # I,136..I,142
+# Block 2: I,165..I,167 (hour counters, voltage type)
+INFO_BLOCK2_START_REG = 165   # qmm 165 -> addr 164
+INFO_BLOCK2_COUNT = 3         # I,165..I,167
+
+# Coil addresses for controls (D addresses are Modbus-aligned per user docs)
+DRAIN_CYL1_COIL = 52          # D,52 -> cylinder 1 manual drain
+
 POLL_INTERVAL_S = 1.0      # temperature polling period
 
 # Scaling
@@ -158,6 +169,18 @@ class Cache:
     last_rtc_update_utc: Optional[str] = None
     last_rtc_write_utc: Optional[str] = None
     rtc_error: Optional[str] = None
+    # Info panel data
+    info_humidifier_status: Optional[int] = None
+    info_conductivity: Optional[int] = None
+    info_cyl1_phase: Optional[int] = None
+    info_cyl1_status: Optional[int] = None
+    info_cyl2_phase: Optional[int] = None
+    info_cyl2_status: Optional[int] = None
+    info_cyl1_hours: Optional[int] = None
+    info_cyl2_hours: Optional[int] = None
+    info_voltage_type: Optional[int] = None
+    info_error: Optional[str] = None
+    cyl1_drain_on: Optional[bool] = None
 
 cache = Cache()
 cache_lock = threading.Lock()
@@ -598,6 +621,60 @@ def poll_registers_once() -> None:
     with cache_lock:
       cache.rtc_error = error_message
 
+  # Poll info registers
+  try:
+    with modbus_lock:
+      modbus_connect_or_raise()
+      info1_rr = read_holding_registers(
+        address=qmm_to_modbus_addr(INFO_BLOCK1_START_REG),
+        count=INFO_BLOCK1_COUNT
+      )
+      info2_rr = read_holding_registers(
+        address=qmm_to_modbus_addr(INFO_BLOCK2_START_REG),
+        count=INFO_BLOCK2_COUNT
+      )
+
+    if info1_rr.isError():
+      raise RuntimeError(f"Modbus read error (info block 1): {info1_rr}")
+    if info2_rr.isError():
+      raise RuntimeError(f"Modbus read error (info block 2): {info2_rr}")
+
+    with cache_lock:
+      # Block 1: I,136..I,142 -> humidifier_status, conductivity, (138 skip), cyl1_phase, cyl1_status, cyl2_phase, cyl2_status
+      cache.info_humidifier_status = int(info1_rr.registers[0])  # I,136
+      cache.info_conductivity = int(info1_rr.registers[1])       # I,137
+      # info1_rr.registers[2] is I,138 (manual conductivity) - skip
+      cache.info_cyl1_phase = int(info1_rr.registers[3])         # I,139
+      cache.info_cyl1_status = int(info1_rr.registers[4])        # I,140
+      cache.info_cyl2_phase = int(info1_rr.registers[5])         # I,141
+      cache.info_cyl2_status = int(info1_rr.registers[6])        # I,142
+      # Block 2: I,165..I,167 -> cyl1_hours, cyl2_hours, voltage_type
+      cache.info_cyl1_hours = int(info2_rr.registers[0])         # I,165
+      cache.info_cyl2_hours = int(info2_rr.registers[1])         # I,166
+      cache.info_voltage_type = int(info2_rr.registers[2])       # I,167
+      cache.info_error = None
+  except Exception as e:
+    reset_modbus_client()
+    error_message = normalize_modbus_error(e)
+    with cache_lock:
+      cache.info_error = error_message
+
+  # Poll drain coil state
+  try:
+    with modbus_lock:
+      modbus_connect_or_raise()
+      drain_rr = read_coils(address=DRAIN_CYL1_COIL, count=1)
+
+    if drain_rr.isError():
+      raise RuntimeError(f"Modbus read error (drain coil): {drain_rr}")
+
+    with cache_lock:
+      cache.cyl1_drain_on = bool(drain_rr.bits[0]) if drain_rr.bits else None
+  except Exception as e:
+    reset_modbus_client()
+    with cache_lock:
+      cache.cyl1_drain_on = None
+
 def poller_loop(stop_evt: threading.Event) -> None:
     while not stop_evt.is_set():
         poll_registers_once()
@@ -643,6 +720,15 @@ INDEX_HTML = """
     .modal .field input { width: 100%; box-sizing: border-box; }
     .modal-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
     .modal-status { min-height: 1.2em; margin-top: 10px; }
+
+    /* Accordion styles */
+    details { margin: 14px 0; }
+    details summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+    details summary:hover { color: #0066cc; }
+    details[open] summary { margin-bottom: 8px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
+    .info-grid .info-label { color: #666; font-size: 0.9em; }
+    .info-grid .info-value { font-weight: 500; }
 
     /* Phone layout (max-width 600px) */
     @media (max-width: 600px) {
@@ -717,6 +803,35 @@ INDEX_HTML = """
       <label>Diagnostics:</label>
       <a class="button-link" href="/logs" target="_blank" rel="noopener">Open Log</a>
     </div>
+
+    <details>
+      <summary>Info</summary>
+      <div class="info-grid">
+        <span class="info-label">Humidifier status:</span>
+        <span class="info-value" id="infoHumStatus">—</span>
+        <span class="info-label">Conductivity:</span>
+        <span class="info-value" id="infoConductivity">—</span>
+        <span class="info-label">Cyl 1 phase:</span>
+        <span class="info-value" id="infoCyl1Phase">—</span>
+        <span class="info-label">Cyl 1 status:</span>
+        <span class="info-value" id="infoCyl1Status">—</span>
+        <span class="info-label">Cyl 2 phase:</span>
+        <span class="info-value" id="infoCyl2Phase">—</span>
+        <span class="info-label">Cyl 2 status:</span>
+        <span class="info-value" id="infoCyl2Status">—</span>
+        <span class="info-label">Cyl 1 hours:</span>
+        <span class="info-value" id="infoCyl1Hours">—</span>
+        <span class="info-label">Cyl 2 hours:</span>
+        <span class="info-value" id="infoCyl2Hours">—</span>
+        <span class="info-label">Voltage type:</span>
+        <span class="info-value" id="infoVoltage">—</span>
+        <span class="info-label">Cyl 1 drain:</span>
+        <span class="info-value">
+          <button id="drainCyl1Btn" class="small-btn" type="button">—</button>
+        </span>
+      </div>
+      <div id="infoError" class="muted"></div>
+    </details>
 
     <div class="row muted config-info">
       Temp reg (QModMaster): <code id="tempReg"></code>,
@@ -815,6 +930,38 @@ INDEX_HTML = """
       } else {
         document.getElementById('lsp').textContent = '—';
       }
+
+      // Info accordion
+      if (j.info) {
+        const humStatMap = {0:'On duty', 1:'Alarm(s)', 2:'Disabled (network)', 3:'Disabled (timer)', 4:'Disabled (remote)', 5:'Disabled (keyboard)', 6:'Manual', 7:'No demand'};
+        const phaseMap = {0:'Not active', 1:'Softstart', 2:'Start', 3:'Steady state', 4:'Reduced', 5:'Delayed stop', 6:'Full flush', 7:'Fast Start', 8:'Fast Start (foam)', 9:'Fast Start (heating)'};
+        const statusMap = {0:'No production', 1:'Start evap', 2:'Water fill', 3:'Producing', 4:'Drain (deciding)', 5:'Drain (pump)', 6:'Drain (closing)', 7:'Blocked', 8:'Inactivity drain', 9:'Flushing', 10:'Manual drain', 11:'No supply water', 12:'Periodic drain'};
+        const voltMap = {0:'200V', 1:'208V', 2:'230V', 3:'400V', 4:'460V', 5:'575V'};
+
+        document.getElementById('infoHumStatus').textContent = humStatMap[j.info.humidifier_status] ?? j.info.humidifier_status ?? '—';
+        document.getElementById('infoConductivity').textContent = j.info.conductivity ?? '—';
+        document.getElementById('infoCyl1Phase').textContent = phaseMap[j.info.cyl1_phase] ?? j.info.cyl1_phase ?? '—';
+        document.getElementById('infoCyl1Status').textContent = statusMap[j.info.cyl1_status] ?? j.info.cyl1_status ?? '—';
+        document.getElementById('infoCyl2Phase').textContent = phaseMap[j.info.cyl2_phase] ?? j.info.cyl2_phase ?? '—';
+        document.getElementById('infoCyl2Status').textContent = statusMap[j.info.cyl2_status] ?? j.info.cyl2_status ?? '—';
+        document.getElementById('infoCyl1Hours').textContent = j.info.cyl1_hours ?? '—';
+        document.getElementById('infoCyl2Hours').textContent = j.info.cyl2_hours ?? '—';
+        document.getElementById('infoVoltage').textContent = voltMap[j.info.voltage_type] ?? j.info.voltage_type ?? '—';
+        document.getElementById('infoError').textContent = j.info.error || '';
+        document.getElementById('infoError').className = j.info.error ? 'muted err' : 'muted';
+        // Drain button
+        const drainBtn = document.getElementById('drainCyl1Btn');
+        if (j.info.cyl1_drain_on === true) {
+          drainBtn.textContent = 'ON';
+          drainBtn.style.background = '#ffcccc';
+        } else if (j.info.cyl1_drain_on === false) {
+          drainBtn.textContent = 'OFF';
+          drainBtn.style.background = '';
+        } else {
+          drainBtn.textContent = '—';
+          drainBtn.style.background = '';
+        }
+      }
     } catch (e) {
       document.getElementById('status').textContent = 'UI error: ' + e;
       document.getElementById('status').className = 'err';
@@ -881,6 +1028,18 @@ INDEX_HTML = """
       closeRtcModal();
     }
   });
+  document.getElementById('drainCyl1Btn').addEventListener('click', async () => {
+    const btn = document.getElementById('drainCyl1Btn');
+    btn.disabled = true;
+    try {
+      const r = await fetch('api/cyl1-drain', { method: 'POST' });
+      const j = await r.json();
+      if (!j.ok) alert('Toggle failed: ' + (j.error || 'unknown'));
+    } finally {
+      btn.disabled = false;
+      await refresh();
+    }
+  });
 
   refresh();
   setInterval(refresh, 1000);
@@ -917,6 +1076,19 @@ def api_temp():
             "last_rtc_update_utc": cache.last_rtc_update_utc,
             "last_rtc_write_utc": cache.last_rtc_write_utc,
             "rtc_error": cache.rtc_error,
+            "info": {
+                "humidifier_status": cache.info_humidifier_status,
+                "conductivity": cache.info_conductivity,
+                "cyl1_phase": cache.info_cyl1_phase,
+                "cyl1_status": cache.info_cyl1_status,
+                "cyl2_phase": cache.info_cyl2_phase,
+                "cyl2_status": cache.info_cyl2_status,
+                "cyl1_hours": cache.info_cyl1_hours,
+                "cyl2_hours": cache.info_cyl2_hours,
+                "voltage_type": cache.info_voltage_type,
+                "error": cache.info_error,
+                "cyl1_drain_on": cache.cyl1_drain_on,
+            },
         }
 
     ok = data["temp_c"] is not None and data["last_error"] is None
@@ -1041,6 +1213,36 @@ def api_setpoint():
         with cache_lock:
           cache.last_error = error_message
         return jsonify({"ok": False, "error": cache.last_error}), 400
+
+
+@app.route("/api/cyl1-drain", methods=["POST"])
+def api_cyl1_drain():
+    """Toggle or set cylinder 1 manual drain pump."""
+    try:
+        body = request.get_json(force=True, silent=True) or {}
+        # If 'on' is provided, use it; otherwise toggle current state
+        if "on" in body:
+            target_state = bool(body["on"])
+        else:
+            with cache_lock:
+                current = cache.cyl1_drain_on
+            target_state = not current if current is not None else True
+
+        with modbus_lock:
+            modbus_connect_or_raise()
+            wr = write_coil(address=DRAIN_CYL1_COIL, value=target_state)
+        if wr.isError():
+            raise RuntimeError(f"Modbus write error (drain coil): {wr}")
+
+        with cache_lock:
+            cache.cyl1_drain_on = target_state
+
+        logger.info("Cylinder 1 drain %s on %s", "ON" if target_state else "OFF", active_com_port)
+        return jsonify({"ok": True, "cyl1_drain_on": target_state})
+    except Exception as e:
+        reset_modbus_client()
+        error_message = normalize_modbus_error(e)
+        return jsonify({"ok": False, "error": error_message}), 400
 
 
 def start_background_poller() -> None:
