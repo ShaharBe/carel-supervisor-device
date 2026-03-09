@@ -13,6 +13,12 @@ Usage (on Pi):
   # Or with options:
   /opt/carel-supervisor/venv/bin/python -u /opt/carel-supervisor/tools/coil_monitor.py --interval 0.3
 
+Interactive control:
+  - While running, type a coil address and press Enter to toggle it.
+  - Accepted formats: 42, D42, D,42
+  - Any entered address is read first, then inverted and written back.
+    This also works for addresses outside the default monitored set.
+
   # When done, restart the service
   sudo systemctl start carel-supervisor
 
@@ -20,6 +26,7 @@ Press Ctrl+C to stop.
 """
 
 import argparse
+import select
 import sys
 import time
 from typing import Dict, List, Optional
@@ -82,6 +89,46 @@ def format_coil(addr: int, value: bool) -> str:
     return f"D,{addr} = {1 if value else 0}  ({desc})"
 
 
+def parse_coil_address(text: str) -> Optional[int]:
+    """Parse user-entered coil address (e.g. '42' or 'D,42')."""
+    raw = text.strip()
+    if not raw:
+        return None
+    upper = raw.upper().replace(" ", "")
+    if upper.startswith("D,"):
+        upper = upper[2:]
+    elif upper.startswith("D"):
+        upper = upper[1:]
+    try:
+        addr = int(upper)
+    except ValueError:
+        return None
+    return addr if addr >= 0 else None
+
+
+def toggle_coil(client: ModbusSerialClient, addr: int, slave_id: int) -> Optional[bool]:
+    """Read a coil, invert it, and write the new value. Returns new value or None on failure."""
+    state = read_coils(client, [addr], slave_id)
+    if addr not in state:
+        print(f"  [WARN] Could not read D,{addr}; toggle skipped", file=sys.stderr)
+        return None
+
+    new_value = not state[addr]
+    try:
+        try:
+            wr = client.write_coil(address=addr, value=new_value, device_id=slave_id)
+        except TypeError:
+            wr = client.write_coil(address=addr, value=new_value, slave=slave_id)
+        if wr.isError():
+            print(f"  [WARN] Write error at D,{addr}: {wr}", file=sys.stderr)
+            return None
+    except Exception as e:
+        print(f"  [WARN] Exception writing D,{addr}: {e}", file=sys.stderr)
+        return None
+
+    return new_value
+
+
 def main():
     parser = argparse.ArgumentParser(description="Monitor coils for changes")
     parser.add_argument("--port", default="/dev/ttyACM0", help="Serial port")
@@ -93,6 +140,7 @@ def main():
     print(f"Connecting to {args.port} @ {args.baudrate} baud, slave {args.slave}")
     print(f"Monitoring {len(COIL_ADDRS)} coils: D,{min(COIL_ADDRS)}..D,{max(COIL_ADDRS)}")
     print(f"Poll interval: {args.interval}s")
+    print("Type a coil address and press Enter to toggle it (e.g. 42 or D,42).")
     print("-" * 60)
 
     client = ModbusSerialClient(
@@ -133,6 +181,20 @@ def main():
                     if old_val is not None and new_val is not None and old_val != new_val:
                         timestamp = time.strftime("%H:%M:%S")
                         print(f"[{timestamp}] CHANGED: {format_coil(addr, new_val)}  (was {1 if old_val else 0})")
+
+            # Non-blocking stdin: allow on-demand coil toggles while monitoring.
+            if select.select([sys.stdin], [], [], 0)[0]:
+                line = sys.stdin.readline()
+                if line:
+                    addr = parse_coil_address(line)
+                    if addr is None:
+                        print("  [WARN] Invalid address. Use integer or D,<n> (e.g. 42 or D,42).")
+                    else:
+                        new_val = toggle_coil(client, addr, args.slave)
+                        if new_val is not None:
+                            timestamp = time.strftime("%H:%M:%S")
+                            print(f"[{timestamp}] TOGGLED: {format_coil(addr, new_val)}")
+                            curr_state[addr] = new_val
 
             prev_state = curr_state
             time.sleep(args.interval)
