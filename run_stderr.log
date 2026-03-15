@@ -1,0 +1,4 @@
+2026-03-16 01:06:22 INFO Modbus client connected on /dev/ttyACM0
+2026-03-16 01:06:22 INFO Carel Supervisor starting
+2026-03-16 01:06:22 INFO Expected adapter identity: vendor=1a86, product=55d3, serial=586D012821
+2026-03-16 01:06:22 INFO Flask server starting on 0.0.0.0:5000

@@ -1,0 +1,33 @@
+9,R,at least 1 alarm is active
+10,R,humidistat status: 0 = open, 1 = closed
+11,R,remote on/off status: 0 = open = ue disabled, 1 = closed = ue enabled
+12,R,high conductivity alarm
+13,R,high conductivity warning
+14,R,cylinder 1: high current alarm
+15,R,cylinder 1: low current alarm
+16,R,cylinder 1: lack of water alarm
+17,R,cylinder 1: low production alarm
+18,R,cylinder 1: drain alarm
+19,R,cylinder 1: full without demand alarm
+20,R,cylinder 1: maintenance-due alarm (timed) (MN alarm)
+21,R,cylinder 1: pre-exhaustion warning (CP alarm)
+22,R,cylinder 1: foam warning
+23,R,cylinder 1: totally exhausted warning (CL alarm)
+24,R,cylinder 1: maintenance-due warning (timed) (CY alarm)
+25,R,cylinder 2: high current alarm
+26,R,cylinder 2: low current alarm
+27,R,cylinder 2: lack of water alarm
+28,R,cylinder 2: low production alarm
+29,R,cylinder 2: drain alarm
+30,R,cylinder 2: full without demand alarm
+31,R,cylinder 2: maintenance-due alarm
+32,R,cylinder 2: pre-exhaustion warning
+33,R,cylinder 2: foam warning
+34,R,cylinder 2: totally exhausted warning
+35,R,cylinder 2: maintenance-due warning
+36,R,warning: room probe/external regulator not properly connected (only when their signal is 2-10 V or 4-20 mA)
+37,R,warning: limit probe not properly connected (only when their signal is 2-10 V or 4-20 mA)
+38,R,room high humidity warning
+39,R,room low humidity warning
+40,R,limit probe high humidity warning
+41,R,hour counter alarm (FAULT CLOCK CARD ALARM)

@@ -21,7 +21,7 @@ import subprocess
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from typing import Optional, Dict, Any, cast
@@ -29,6 +29,7 @@ from typing import Optional, Dict, Any, cast
 from flask import Flask, jsonify, request, Response
 
 # Client factory - handles real HW vs simulator toggle
+from alarms import ALARM_CATALOG
 from client_factory import create_modbus_client, is_simulator_mode
 
 # ---------------------------
@@ -82,6 +83,7 @@ INFO_BLOCK2_COUNT = 3         # I,165..I,167
 
 # Coil addresses for controls (D addresses are Modbus-aligned per user docs)
 DRAIN_CYL1_COIL = 52          # D,52 -> cylinder 1 manual drain
+# Alarm coils are loaded from modbus_alarms.csv and use direct Modbus 0-based coil addresses.
 
 POLL_INTERVAL_S = 1.0      # temperature polling period
 
@@ -181,6 +183,11 @@ class Cache:
     info_voltage_type: Optional[int] = None
     info_error: Optional[str] = None
     cyl1_drain_on: Optional[bool] = None
+    alarms_has_active: Optional[bool] = None
+    alarms_active: list[dict[str, Any]] = field(default_factory=list)
+    alarms_skipped_active_count: int = 0
+    alarms_last_scan_utc: Optional[str] = None
+    alarms_error: Optional[str] = None
 
 cache = Cache()
 cache_lock = threading.Lock()
@@ -659,6 +666,49 @@ def poll_registers_once() -> None:
     with cache_lock:
       cache.info_error = error_message
 
+  # Poll alarm summary coil first, then scan the full alarm bank only when active.
+  try:
+    active_alarms: list[dict[str, Any]] = []
+    skipped_alarm_count = 0
+
+    with modbus_lock:
+      modbus_connect_or_raise()
+      alarm_summary_rr = read_coils(address=ALARM_CATALOG.summary.address, count=1)
+      if alarm_summary_rr.isError():
+        raise RuntimeError(f"Modbus read error (alarm summary coil): {alarm_summary_rr}")
+
+      alarms_have_active = bool(alarm_summary_rr.bits[0]) if alarm_summary_rr.bits else False
+      if alarms_have_active:
+        alarm_bank_rr = read_coils(
+          address=ALARM_CATALOG.range_start,
+          count=ALARM_CATALOG.range_count,
+        )
+        if alarm_bank_rr.isError():
+          raise RuntimeError(f"Modbus read error (alarm bank): {alarm_bank_rr}")
+
+        alarm_bits = alarm_bank_rr.bits or []
+        active_alarms = [
+          {"address": definition.address, "description": definition.description}
+          for definition in ALARM_CATALOG.active_monitored(alarm_bits)
+        ]
+        skipped_alarm_count = len(ALARM_CATALOG.active_skipped(alarm_bits))
+
+    with cache_lock:
+      cache.alarms_has_active = alarms_have_active
+      cache.alarms_active = active_alarms
+      cache.alarms_skipped_active_count = skipped_alarm_count
+      cache.alarms_last_scan_utc = now_iso()
+      cache.alarms_error = None
+  except Exception as e:
+    reset_modbus_client()
+    error_message = normalize_modbus_error(e)
+    with cache_lock:
+      cache.alarms_has_active = None
+      cache.alarms_active = []
+      cache.alarms_skipped_active_count = 0
+      cache.alarms_last_scan_utc = now_iso()
+      cache.alarms_error = error_message
+
   # Poll drain coil state
   try:
     with modbus_lock:
@@ -729,6 +779,56 @@ INDEX_HTML = """
     .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; }
     .info-grid .info-label { color: #666; font-size: 0.9em; }
     .info-grid .info-value { font-weight: 500; }
+    .alarms-panel {
+      margin: 18px 0;
+      padding: 16px;
+      border-radius: 16px;
+      border: 1px solid #e6c9a8;
+      background:
+        radial-gradient(circle at top right, rgba(255, 230, 196, 0.9), transparent 40%),
+        linear-gradient(180deg, #fff6eb 0%, #fffdfa 100%);
+    }
+    .alarms-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .alarms-kicker { color: #9a6a2b; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+    .alarms-title { margin: 4px 0 0; font-size: 1.08rem; }
+    .alarm-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .alarm-pill-neutral { background: #efefef; color: #555; }
+    .alarm-pill-clear { background: #e7f7ec; color: #0b6b0b; }
+    .alarm-pill-active { background: #fff0f0; color: #b00020; }
+    .alarm-meta { margin-top: 8px; }
+    .alarm-empty {
+      margin-top: 12px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px dashed #d9c3a7;
+      background: rgba(255, 255, 255, 0.8);
+      color: #6f5b43;
+    }
+    .alarm-list { display: grid; gap: 10px; margin-top: 12px; }
+    .alarm-card {
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: 1px solid #efc3c8;
+      background: #fff;
+      box-shadow: 0 8px 18px rgba(176, 0, 32, 0.08);
+    }
+    .alarm-address {
+      color: #9a6a2b;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .alarm-description { margin-top: 4px; font-weight: 600; color: #2a2117; }
+    .alarm-hint { margin-top: 10px; min-height: 1.2em; }
 
     /* Phone layout (max-width 600px) */
     @media (max-width: 600px) {
@@ -745,6 +845,7 @@ INDEX_HTML = """
       .modal-actions { flex-direction: column; }
       .modal .field input { width: 100%; }
       h2 { font-size: 1.4em; }
+      .alarms-panel { padding: 14px; }
       .config-info { display: none; } /* hide technical details on phone */
     }
   </style>
@@ -803,6 +904,20 @@ INDEX_HTML = """
       <label>Diagnostics:</label>
       <a class="button-link" href="/logs" target="_blank" rel="noopener">Open Log</a>
     </div>
+
+    <section class="alarms-panel" aria-labelledby="alarmsTitle">
+      <div class="alarms-head">
+        <div>
+          <div class="alarms-kicker">Attention</div>
+          <h3 id="alarmsTitle" class="alarms-title">Alarms</h3>
+        </div>
+        <span id="alarmsBadge" class="alarm-pill alarm-pill-neutral">Checking...</span>
+      </div>
+      <div id="alarmsMeta" class="muted alarm-meta">Waiting for first alarm scan...</div>
+      <div id="alarmsEmpty" class="alarm-empty">Waiting for alarm status...</div>
+      <div id="alarmsList" class="alarm-list"></div>
+      <div id="alarmsHint" class="muted alarm-hint"></div>
+    </section>
 
     <details>
       <summary>Info</summary>
@@ -887,6 +1002,82 @@ INDEX_HTML = """
     document.getElementById('rtcModalBackdrop').setAttribute('aria-hidden', 'true');
   }
 
+  function setAlarmBadge(mode, text) {
+    const badge = document.getElementById('alarmsBadge');
+    badge.textContent = text;
+    badge.className = 'alarm-pill ' + mode;
+  }
+
+  function renderAlarms(alarms) {
+    const meta = document.getElementById('alarmsMeta');
+    const empty = document.getElementById('alarmsEmpty');
+    const list = document.getElementById('alarmsList');
+    const hint = document.getElementById('alarmsHint');
+    list.replaceChildren();
+    hint.textContent = '';
+
+    if (!alarms) {
+      setAlarmBadge('alarm-pill-neutral', 'Unavailable');
+      meta.textContent = 'Alarm data not available.';
+      empty.textContent = 'Waiting for alarm status...';
+      return;
+    }
+
+    meta.textContent = alarms.last_scan_utc
+      ? ('Last scan (UTC): ' + alarms.last_scan_utc)
+      : 'Waiting for first alarm scan...';
+
+    if (alarms.error) {
+      setAlarmBadge('alarm-pill-neutral', 'Read error');
+      empty.textContent = 'Unable to load alarms right now.';
+      hint.textContent = alarms.error;
+      hint.className = 'alarm-hint err';
+      return;
+    }
+
+    if (alarms.has_active === true) {
+      setAlarmBadge('alarm-pill-active', 'Active');
+      if (alarms.active.length > 0) {
+        empty.textContent = 'Active alarm coils detected:';
+        alarms.active.forEach((alarm) => {
+          const card = document.createElement('div');
+          card.className = 'alarm-card';
+
+          const address = document.createElement('div');
+          address.className = 'alarm-address';
+          address.textContent = 'D,' + alarm.address;
+
+          const description = document.createElement('div');
+          description.className = 'alarm-description';
+          description.textContent = alarm.description;
+
+          card.append(address, description);
+          list.appendChild(card);
+        });
+      } else if (alarms.skipped_active_count > 0) {
+        empty.textContent = 'Alarm summary is active, but only intentionally skipped cylinder 2 alarm bits are set.';
+      } else {
+        empty.textContent = 'Alarm summary is active, but no monitored alarm bits are currently set.';
+      }
+    } else if (alarms.has_active === false) {
+      setAlarmBadge('alarm-pill-clear', 'Clear');
+      empty.textContent = 'No active alarms.';
+    } else {
+      setAlarmBadge('alarm-pill-neutral', 'Checking...');
+      empty.textContent = 'Waiting for alarm status...';
+    }
+
+    if (alarms.skipped_active_count > 0) {
+      const plural = alarms.skipped_active_count === 1 ? 'bit' : 'bits';
+      hint.textContent =
+        'Cylinder 2 alarms are intentionally skipped on this unit (' +
+        alarms.skipped_active_count + ' skipped ' + plural + ' active).';
+      hint.className = 'alarm-hint muted';
+    } else {
+      hint.className = 'alarm-hint muted';
+    }
+  }
+
   async function refresh() {
     try {
       const r = await fetch('api/temp');
@@ -962,9 +1153,16 @@ INDEX_HTML = """
           drainBtn.style.background = '';
         }
       }
+
+      renderAlarms(j.alarms);
     } catch (e) {
       document.getElementById('status').textContent = 'UI error: ' + e;
       document.getElementById('status').className = 'err';
+      setAlarmBadge('alarm-pill-neutral', 'UI error');
+      document.getElementById('alarmsMeta').textContent = 'Alarm UI error';
+      document.getElementById('alarmsEmpty').textContent = 'Unable to render alarms.';
+      document.getElementById('alarmsHint').textContent = String(e);
+      document.getElementById('alarmsHint').className = 'alarm-hint err';
     }
   }
 
@@ -1076,6 +1274,13 @@ def api_temp():
             "last_rtc_update_utc": cache.last_rtc_update_utc,
             "last_rtc_write_utc": cache.last_rtc_write_utc,
             "rtc_error": cache.rtc_error,
+            "alarms": {
+                "has_active": cache.alarms_has_active,
+                "active": cache.alarms_active,
+                "skipped_active_count": cache.alarms_skipped_active_count,
+                "last_scan_utc": cache.alarms_last_scan_utc,
+                "error": cache.alarms_error,
+            },
             "info": {
                 "humidifier_status": cache.info_humidifier_status,
                 "conductivity": cache.info_conductivity,
@@ -1119,6 +1324,9 @@ def api_temp():
               "month": RTC_WRITE_MONTH_REG,
               "year": RTC_WRITE_YEAR_REG,
             },
+            "alarm_summary_coil": ALARM_CATALOG.summary.address,
+            "alarm_scan_start_coil": ALARM_CATALOG.range_start,
+            "alarm_scan_count": ALARM_CATALOG.range_count,
             "poll_interval_s": POLL_INTERVAL_S,
         },
         **data,

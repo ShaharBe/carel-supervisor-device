@@ -7,7 +7,7 @@ Mimics the pymodbus ModbusSerialClient interface.
 
 from datetime import datetime
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Dict, Optional
 
 
@@ -17,6 +17,7 @@ class SimulatedResponse:
     Mimics pymodbus response object.
     """
     registers: Optional[List[int]] = None
+    bits: Optional[List[bool]] = None
     _is_error: bool = False
     _error_msg: str = ""
 
@@ -26,6 +27,8 @@ class SimulatedResponse:
     def __str__(self) -> str:
         if self._is_error:
             return f"SimulatedError: {self._error_msg}"
+        if self.bits is not None:
+            return f"SimulatedResponse(bits={self.bits})"
         return f"SimulatedResponse(registers={self.registers})"
 
 
@@ -39,6 +42,7 @@ class SimulatorClient:
         # Accept same kwargs as ModbusSerialClient but ignore them
         self._holding_registers: Dict[int, int] = {}
         self._input_registers: Dict[int, int] = {}
+        self._coils: Dict[int, bool] = {}
         self._connected = False
         self._initialize_defaults()
         print("[SIMULATOR] Client created (no real hardware)")
@@ -63,6 +67,7 @@ class SimulatorClient:
         self._holding_registers[161] = now.day
         self._holding_registers[162] = now.month
         self._holding_registers[163] = now.year % 100
+        self._coils[52] = False
 
     @property
     def connected(self) -> bool:
@@ -116,6 +121,24 @@ class SimulatorClient:
         print(f"[SIMULATOR] Read input registers {address}-{address+count-1}: {values}")
         return SimulatedResponse(registers=values)
 
+    def read_coils(
+        self,
+        address: int,
+        count: int = 1,
+        slave: int = 1,
+        device_id: Optional[int] = None,
+    ) -> SimulatedResponse:
+        """Read coil bits from simulated memory."""
+        if not self._connected:
+            return SimulatedResponse(_is_error=True, _error_msg="Not connected")
+
+        values = []
+        for addr in range(address, address + count):
+            values.append(bool(self._coils.get(addr, False)))
+
+        print(f"[SIMULATOR] Read coils {address}-{address+count-1}: {values}")
+        return SimulatedResponse(bits=values)
+
     def write_register(
         self,
         address: int,
@@ -148,6 +171,21 @@ class SimulatorClient:
         print(f"[SIMULATOR] Write registers {address}-{address+len(values)-1} = {values}")
         return SimulatedResponse(registers=values)
 
+    def write_coil(
+        self,
+        address: int,
+        value: bool,
+        slave: int = 1,
+        device_id: Optional[int] = None,
+    ) -> SimulatedResponse:
+        """Write a single coil bit to simulated memory."""
+        if not self._connected:
+            return SimulatedResponse(_is_error=True, _error_msg="Not connected")
+
+        self._coils[address] = bool(value)
+        print(f"[SIMULATOR] Write coil {address} = {bool(value)}")
+        return SimulatedResponse(bits=[bool(value)])
+
     # -------------------------
     # Helper methods for testing
     # -------------------------
@@ -160,9 +198,14 @@ class SimulatorClient:
         """Helper to preset holding register values."""
         self._holding_registers[address] = value
 
+    def set_coil(self, address: int, value: bool) -> None:
+        """Helper to preset coil values for simulated alarm/control scenarios."""
+        self._coils[address] = bool(value)
+
     def get_all_registers(self) -> Dict[str, Dict[int, int]]:
         """Debug helper to see all register states."""
         return {
             'holding': dict(self._holding_registers),
-            'input': dict(self._input_registers)
+            'input': dict(self._input_registers),
+            'coils': {addr: int(value) for addr, value in self._coils.items()},
         }
