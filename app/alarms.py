@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Sequence
 
 
-ALARMS_CSV_PATH = Path(__file__).resolve().parents[1] / "modbus_alarms.csv"
+ALARMS_CSV_PATH = Path(__file__).resolve().with_name("modbus_alarms.csv")
 SUMMARY_DESCRIPTION = "at least 1 alarm is active"
 NON_ALARM_PREFIXES = (
     "humidistat status:",

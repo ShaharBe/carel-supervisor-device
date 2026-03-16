@@ -83,7 +83,7 @@ INFO_BLOCK2_COUNT = 3         # I,165..I,167
 
 # Coil addresses for controls (D addresses are Modbus-aligned per user docs)
 DRAIN_CYL1_COIL = 52          # D,52 -> cylinder 1 manual drain
-# Alarm coils are loaded from modbus_alarms.csv and use direct Modbus 0-based coil addresses.
+# Alarm coils are loaded from app/modbus_alarms.csv and use direct Modbus 0-based coil addresses.
 
 POLL_INTERVAL_S = 1.0      # temperature polling period
 
