@@ -803,7 +803,6 @@ INDEX_HTML = """
     .alarm-pill-neutral { background: #efefef; color: #555; }
     .alarm-pill-clear { background: #e7f7ec; color: #0b6b0b; }
     .alarm-pill-active { background: #fff0f0; color: #b00020; }
-    .alarm-meta { margin-top: 8px; }
     .alarm-empty {
       margin-top: 12px;
       padding: 12px 14px;
@@ -829,6 +828,24 @@ INDEX_HTML = """
     }
     .alarm-description { margin-top: 4px; font-weight: 600; color: #2a2117; }
     .alarm-hint { margin-top: 10px; min-height: 1.2em; }
+    .footer-actions {
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid #eee;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .danger-btn {
+      border: 1px solid #d38b93;
+      border-radius: 10px;
+      background: #fff3f4;
+      color: #8c1d2c;
+      font-weight: 600;
+    }
+    .danger-btn:hover { background: #ffe6e9; }
 
     /* Phone layout (max-width 600px) */
     @media (max-width: 600px) {
@@ -846,6 +863,7 @@ INDEX_HTML = """
       .modal .field input { width: 100%; }
       h2 { font-size: 1.4em; }
       .alarms-panel { padding: 14px; }
+      .footer-actions { align-items: stretch; }
       .config-info { display: none; } /* hide technical details on phone */
     }
   </style>
@@ -857,11 +875,6 @@ INDEX_HTML = """
       <label>Temperature:</label>
       <span id="temp">—</span>
       <span class="muted" id="temp_raw"></span>
-    </div>
-
-    <div class="row">
-      <label>Last update (UTC):</label>
-      <span class="muted" id="ts">—</span>
     </div>
 
     <div class="row">
@@ -913,7 +926,6 @@ INDEX_HTML = """
         </div>
         <span id="alarmsBadge" class="alarm-pill alarm-pill-neutral">Checking...</span>
       </div>
-      <div id="alarmsMeta" class="muted alarm-meta">Waiting for first alarm scan...</div>
       <div id="alarmsEmpty" class="alarm-empty">Waiting for alarm status...</div>
       <div id="alarmsList" class="alarm-list"></div>
       <div id="alarmsHint" class="muted alarm-hint"></div>
@@ -951,6 +963,10 @@ INDEX_HTML = """
     <div class="row muted config-info">
       Temp reg (QModMaster): <code id="tempReg"></code>,
       Setpoint reg (QModMaster): <code id="spReg"></code>
+    </div>
+    <div class="footer-actions">
+      <span id="systemStatus" class="muted">System actions</span>
+      <button id="rebootBtn" class="danger-btn" type="button">Reboot</button>
     </div>
   </div>
 
@@ -1009,7 +1025,6 @@ INDEX_HTML = """
   }
 
   function renderAlarms(alarms) {
-    const meta = document.getElementById('alarmsMeta');
     const empty = document.getElementById('alarmsEmpty');
     const list = document.getElementById('alarmsList');
     const hint = document.getElementById('alarmsHint');
@@ -1018,14 +1033,9 @@ INDEX_HTML = """
 
     if (!alarms) {
       setAlarmBadge('alarm-pill-neutral', 'Unavailable');
-      meta.textContent = 'Alarm data not available.';
       empty.textContent = 'Waiting for alarm status...';
       return;
     }
-
-    meta.textContent = alarms.last_scan_utc
-      ? ('Last scan (UTC): ' + alarms.last_scan_utc)
-      : 'Waiting for first alarm scan...';
 
     if (alarms.error) {
       setAlarmBadge('alarm-pill-neutral', 'Read error');
@@ -1090,7 +1100,6 @@ INDEX_HTML = """
       if (j.ok) {
         document.getElementById('temp').textContent = j.temp_c.toFixed(1) + ' °C';
         document.getElementById('temp_raw').textContent = '(raw ' + j.temp_raw + ')';
-        document.getElementById('ts').textContent = j.last_update_utc || '—';
         document.getElementById('status').textContent = 'OK';
         document.getElementById('status').className = 'ok';
       } else {
@@ -1159,7 +1168,6 @@ INDEX_HTML = """
       document.getElementById('status').textContent = 'UI error: ' + e;
       document.getElementById('status').className = 'err';
       setAlarmBadge('alarm-pill-neutral', 'UI error');
-      document.getElementById('alarmsMeta').textContent = 'Alarm UI error';
       document.getElementById('alarmsEmpty').textContent = 'Unable to render alarms.';
       document.getElementById('alarmsHint').textContent = String(e);
       document.getElementById('alarmsHint').className = 'alarm-hint err';
@@ -1212,6 +1220,34 @@ INDEX_HTML = """
     await refresh();
   }
 
+  async function rebootDevice() {
+    const shouldReboot = window.confirm('Are you sure you want to reboot the device?');
+    if (!shouldReboot) return;
+
+    const rebootBtn = document.getElementById('rebootBtn');
+    const systemStatus = document.getElementById('systemStatus');
+    rebootBtn.disabled = true;
+    systemStatus.textContent = 'Sending reboot command...';
+    systemStatus.className = 'muted';
+
+    try {
+      const r = await fetch('api/reboot', { method: 'POST' });
+      const j = await r.json();
+      if (!j.ok) {
+        systemStatus.textContent = j.error || 'Reboot failed.';
+        systemStatus.className = 'err';
+        return;
+      }
+      systemStatus.textContent = j.message || 'Reboot command sent.';
+      systemStatus.className = 'muted';
+    } catch (e) {
+      systemStatus.textContent = 'Reboot failed: ' + e;
+      systemStatus.className = 'err';
+    } finally {
+      rebootBtn.disabled = false;
+    }
+  }
+
   document.getElementById('setBtn').addEventListener('click', writeSetpoint);
   document.getElementById('editRtcBtn').addEventListener('click', openRtcModal);
   document.getElementById('cancelRtcBtn').addEventListener('click', closeRtcModal);
@@ -1238,6 +1274,7 @@ INDEX_HTML = """
       await refresh();
     }
   });
+  document.getElementById('rebootBtn').addEventListener('click', rebootDevice);
 
   refresh();
   setInterval(refresh, 1000);
@@ -1451,6 +1488,24 @@ def api_cyl1_drain():
         reset_modbus_client()
         error_message = normalize_modbus_error(e)
         return jsonify({"ok": False, "error": error_message}), 400
+
+
+@app.route("/api/reboot", methods=["POST"])
+def api_reboot():
+    try:
+        if is_simulator_mode():
+            raise RuntimeError("Reboot is disabled while running in simulator mode.")
+        if os.name != "posix":
+            raise RuntimeError("Reboot is only supported on the Linux device.")
+
+        subprocess.Popen(["sudo", "reboot"])
+        logger.warning("System reboot requested from the web UI")
+        return jsonify({
+            "ok": True,
+            "message": "Reboot command sent. The device should go offline shortly.",
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
 
 
 def start_background_poller() -> None:
