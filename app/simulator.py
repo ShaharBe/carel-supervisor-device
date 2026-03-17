@@ -5,10 +5,14 @@ Simulates register reads/writes in memory - no actual Modbus communication.
 Mimics the pymodbus ModbusSerialClient interface.
 """
 
+from alarms import ALARM_CATALOG
 from datetime import datetime
 
 from dataclasses import dataclass
 from typing import List, Dict, Optional
+
+
+ALARM_RESET_COIL = 51
 
 
 @dataclass
@@ -67,7 +71,16 @@ class SimulatorClient:
         self._holding_registers[161] = now.day
         self._holding_registers[162] = now.month
         self._holding_registers[163] = now.year % 100
+        self._coils[ALARM_CATALOG.summary.address] = False
+        self._coils[ALARM_RESET_COIL] = False
         self._coils[52] = False
+
+    def _clear_alarm_coils(self) -> None:
+        """Mimic the controller clearing its alarm bank after a reset pulse."""
+        for definition in [ALARM_CATALOG.summary, *ALARM_CATALOG.monitored, *ALARM_CATALOG.skipped]:
+            self._coils[definition.address] = False
+        # The real controller drops the reset bit automatically after the clear cycle.
+        self._coils[ALARM_RESET_COIL] = False
 
     @property
     def connected(self) -> bool:
@@ -183,6 +196,8 @@ class SimulatorClient:
             return SimulatedResponse(_is_error=True, _error_msg="Not connected")
 
         self._coils[address] = bool(value)
+        if address == ALARM_RESET_COIL and value:
+            self._clear_alarm_coils()
         print(f"[SIMULATOR] Write coil {address} = {bool(value)}")
         return SimulatedResponse(bits=[bool(value)])
 

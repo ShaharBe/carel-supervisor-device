@@ -83,6 +83,7 @@ INFO_BLOCK2_COUNT = 3         # I,165..I,167
 
 # Coil addresses for controls (D addresses are Modbus-aligned per user docs)
 DRAIN_CYL1_COIL = 52          # D,52 -> cylinder 1 manual drain
+ALARM_RESET_COIL = 51         # D,51 -> alarm reset pulse
 # Alarm coils are loaded from app/modbus_alarms.csv and use direct Modbus 0-based coil addresses.
 
 POLL_INTERVAL_S = 1.0      # temperature polling period
@@ -780,54 +781,58 @@ INDEX_HTML = """
     .info-grid .info-label { color: #666; font-size: 0.9em; }
     .info-grid .info-value { font-weight: 500; }
     .alarms-panel {
-      margin: 18px 0;
-      padding: 16px;
-      border-radius: 16px;
+      margin: 14px 0;
+      padding: 12px 13px;
+      border-radius: 14px;
       border: 1px solid #e6c9a8;
       background:
         radial-gradient(circle at top right, rgba(255, 230, 196, 0.9), transparent 40%),
         linear-gradient(180deg, #fff6eb 0%, #fffdfa 100%);
     }
     .alarms-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-    .alarms-kicker { color: #9a6a2b; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-    .alarms-title { margin: 4px 0 0; font-size: 1.08rem; }
+    .alarms-title { margin: 0; font-size: 1.02rem; }
+    .alarms-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .alarm-pill {
       display: inline-flex;
       align-items: center;
-      padding: 6px 10px;
+      padding: 5px 9px;
       border-radius: 999px;
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       font-weight: 700;
       white-space: nowrap;
     }
     .alarm-pill-neutral { background: #efefef; color: #555; }
     .alarm-pill-clear { background: #e7f7ec; color: #0b6b0b; }
     .alarm-pill-active { background: #fff0f0; color: #b00020; }
+    .alarm-clear-btn {
+      padding: 6px 10px;
+      border-color: #d9c3a7;
+      background: rgba(255, 255, 255, 0.82);
+      color: #6b4a20;
+      font-size: 0.88rem;
+    }
+    .alarm-clear-btn:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
     .alarm-empty {
-      margin-top: 12px;
-      padding: 12px 14px;
-      border-radius: 12px;
+      margin-top: 8px;
+      padding: 9px 11px;
+      border-radius: 10px;
       border: 1px dashed #d9c3a7;
       background: rgba(255, 255, 255, 0.8);
       color: #6f5b43;
     }
-    .alarm-list { display: grid; gap: 10px; margin-top: 12px; }
+    .alarm-list { display: grid; gap: 8px; margin-top: 8px; }
     .alarm-card {
-      padding: 12px 14px;
-      border-radius: 12px;
+      padding: 9px 11px;
+      border-radius: 10px;
       border: 1px solid #efc3c8;
       background: #fff;
       box-shadow: 0 8px 18px rgba(176, 0, 32, 0.08);
     }
-    .alarm-address {
-      color: #9a6a2b;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 0.82rem;
-      font-weight: 700;
-      text-transform: uppercase;
-    }
-    .alarm-description { margin-top: 4px; font-weight: 600; color: #2a2117; }
-    .alarm-hint { margin-top: 10px; min-height: 1.2em; }
+    .alarm-description { margin-top: 0; font-weight: 600; color: #2a2117; line-height: 1.35; }
+    .alarm-hint { margin-top: 8px; min-height: 1.2em; }
     .footer-actions {
       margin-top: 18px;
       padding-top: 16px;
@@ -862,7 +867,7 @@ INDEX_HTML = """
       .modal-actions { flex-direction: column; }
       .modal .field input { width: 100%; }
       h2 { font-size: 1.4em; }
-      .alarms-panel { padding: 14px; }
+      .alarms-panel { padding: 12px; }
       .footer-actions { align-items: stretch; }
       .config-info { display: none; } /* hide technical details on phone */
     }
@@ -921,10 +926,12 @@ INDEX_HTML = """
     <section class="alarms-panel" aria-labelledby="alarmsTitle">
       <div class="alarms-head">
         <div>
-          <div class="alarms-kicker">Attention</div>
           <h3 id="alarmsTitle" class="alarms-title">Alarms</h3>
         </div>
-        <span id="alarmsBadge" class="alarm-pill alarm-pill-neutral">Checking...</span>
+        <div class="alarms-actions">
+          <span id="alarmsBadge" class="alarm-pill alarm-pill-neutral">Checking...</span>
+          <button id="clearAlarmsBtn" class="small-btn alarm-clear-btn" type="button" disabled>Clear alarms</button>
+        </div>
       </div>
       <div id="alarmsEmpty" class="alarm-empty">Waiting for alarm status...</div>
       <div id="alarmsList" class="alarm-list"></div>
@@ -993,6 +1000,8 @@ INDEX_HTML = """
 <script>
   let rtcModalOpen = false;
   let lastRtcIsoLocal = null;
+  let lastAlarmState = null;
+  let clearAlarmsBusy = false;
 
   function browserDateTimeLocalValue() {
     const now = new Date();
@@ -1024,12 +1033,23 @@ INDEX_HTML = """
     badge.className = 'alarm-pill ' + mode;
   }
 
+  function syncClearAlarmsButton() {
+    const clearBtn = document.getElementById('clearAlarmsBtn');
+    clearBtn.textContent = clearAlarmsBusy ? 'Clearing...' : 'Clear alarms';
+    clearBtn.disabled = clearAlarmsBusy || !(lastAlarmState && lastAlarmState.has_active === true);
+  }
+
   function renderAlarms(alarms) {
+    lastAlarmState = alarms;
     const empty = document.getElementById('alarmsEmpty');
     const list = document.getElementById('alarmsList');
     const hint = document.getElementById('alarmsHint');
     list.replaceChildren();
+    list.hidden = true;
+    empty.hidden = false;
     hint.textContent = '';
+    hint.className = 'alarm-hint muted';
+    syncClearAlarmsButton();
 
     if (!alarms) {
       setAlarmBadge('alarm-pill-neutral', 'Unavailable');
@@ -1048,20 +1068,17 @@ INDEX_HTML = """
     if (alarms.has_active === true) {
       setAlarmBadge('alarm-pill-active', 'Active');
       if (alarms.active.length > 0) {
-        empty.textContent = 'Active alarm coils detected:';
+        empty.hidden = true;
+        list.hidden = false;
         alarms.active.forEach((alarm) => {
           const card = document.createElement('div');
           card.className = 'alarm-card';
-
-          const address = document.createElement('div');
-          address.className = 'alarm-address';
-          address.textContent = 'D,' + alarm.address;
 
           const description = document.createElement('div');
           description.className = 'alarm-description';
           description.textContent = alarm.description;
 
-          card.append(address, description);
+          card.append(description);
           list.appendChild(card);
         });
       } else if (alarms.skipped_active_count > 0) {
@@ -1220,6 +1237,25 @@ INDEX_HTML = """
     await refresh();
   }
 
+  async function clearAlarms() {
+    clearAlarmsBusy = true;
+    syncClearAlarmsButton();
+
+    try {
+      const r = await fetch('api/alarms-reset', { method: 'POST' });
+      const j = await r.json();
+      if (!j.ok) {
+        alert('Alarm reset failed: ' + (j.error || 'unknown'));
+        return;
+      }
+    } catch (e) {
+      alert('Alarm reset failed: ' + e);
+    } finally {
+      clearAlarmsBusy = false;
+      await refresh();
+    }
+  }
+
   async function rebootDevice() {
     const shouldReboot = window.confirm('Are you sure you want to reboot the device?');
     if (!shouldReboot) return;
@@ -1275,6 +1311,7 @@ INDEX_HTML = """
     }
   });
   document.getElementById('rebootBtn').addEventListener('click', rebootDevice);
+  document.getElementById('clearAlarmsBtn').addEventListener('click', clearAlarms);
 
   refresh();
   setInterval(refresh, 1000);
@@ -1484,6 +1521,24 @@ def api_cyl1_drain():
 
         logger.info("Cylinder 1 drain %s on %s", "ON" if target_state else "OFF", active_com_port)
         return jsonify({"ok": True, "cyl1_drain_on": target_state})
+    except Exception as e:
+        reset_modbus_client()
+        error_message = normalize_modbus_error(e)
+        return jsonify({"ok": False, "error": error_message}), 400
+
+
+@app.route("/api/alarms-reset", methods=["POST"])
+def api_alarms_reset():
+    """Pulse the controller alarm reset coil so it can clear active alarms."""
+    try:
+        with modbus_lock:
+            modbus_connect_or_raise()
+            wr = write_coil(address=ALARM_RESET_COIL, value=True)
+        if wr.isError():
+            raise RuntimeError(f"Modbus write error (alarm reset coil): {wr}")
+
+        logger.info("Alarm reset requested on %s", active_com_port)
+        return jsonify({"ok": True, "message": "Alarm reset command sent."})
     except Exception as e:
         reset_modbus_client()
         error_message = normalize_modbus_error(e)
