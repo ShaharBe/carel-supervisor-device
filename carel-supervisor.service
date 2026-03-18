@@ -4,6 +4,7 @@ After=network.target
 
 [Service]
 User=pi
+EnvironmentFile=-/opt/carel-supervisor/carel-supervisor.env
 WorkingDirectory=/opt/carel-supervisor/app
 ExecStart=/opt/carel-supervisor/venv/bin/python app.py
 Restart=always

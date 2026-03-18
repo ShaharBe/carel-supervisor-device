@@ -91,7 +91,6 @@ POLL_INTERVAL_S = 1.0      # temperature polling period
 # Scaling
 TEMP_SCALE = 10.0          # 249 -> 24.9
 SETPOINT_SCALE = 10.0      # assume same scaling for setpoint (common on Carel)
-REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 LOG_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "logs"))
 LOG_FILE = os.path.join(LOG_DIR, "app.log")
 LOG_MAX_BYTES = 512 * 1024
@@ -131,21 +130,9 @@ def setup_logging() -> logging.Logger:
   return logger
 
 
-def read_git_commit_hash() -> str:
-  """Return the short git commit hash for the checked-out repo, if available."""
-  try:
-    result = subprocess.run(
-      ["git", "-C", REPO_ROOT, "rev-parse", "--short", "HEAD"],
-      check=True,
-      capture_output=True,
-      text=True,
-      timeout=5,
-    )
-  except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-    return "unknown"
-
-  commit_hash = result.stdout.strip()
-  return commit_hash or "unknown"
+def read_runtime_commit_hash() -> str:
+  """Return the deployment-injected commit hash for the running app."""
+  return os.environ.get("APP_COMMIT_HASH", "").strip() or "unknown"
 
 
 def build_modbus_client(port: str):
@@ -213,7 +200,7 @@ cache_lock = threading.Lock()
 modbus_lock = threading.Lock()
 runtime_state_lock = threading.Lock()
 logger = setup_logging()
-APP_COMMIT_HASH = read_git_commit_hash()
+APP_COMMIT_HASH = read_runtime_commit_hash()
 last_detected_port: Optional[str] = None
 last_adapter_missing = False
 last_connected_port: Optional[str] = None
