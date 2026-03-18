@@ -746,7 +746,7 @@ INDEX_HTML = """
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CAREL™ Supervisory System</title>
+  <title>{{APP_TITLE}}</title>
   <style>
     /* Base / Desktop styles */
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 28px; }
@@ -968,12 +968,11 @@ INDEX_HTML = """
       h2 { font-size: 1.4em; }
       .alarms-panel { padding: 12px; }
       .footer-actions { align-items: stretch; }
-      .config-info { display: none; } /* hide technical details on phone */
     }
   </style>
 </head>
 <body>
-  <h2>CAREL™ Supervisory System</h2>
+  <h2>{{APP_TITLE}}</h2>
   <div class="card">
     <div class="top-strip">
       <div class="top-item">
@@ -1046,10 +1045,6 @@ INDEX_HTML = """
       <div id="infoError" class="muted"></div>
     </details>
 
-    <div class="row muted config-info">
-      Temp reg (QModMaster): <code id="tempReg"></code>,
-      Setpoint reg (QModMaster): <code id="spReg"></code>
-    </div>
     <div class="footer-actions">
       <span id="systemStatus" class="muted">System actions</span>
       <div class="footer-buttons">
@@ -1197,8 +1192,6 @@ INDEX_HTML = """
       const r = await fetch('api/temp');
       const j = await r.json();
 
-      document.getElementById('tempReg').textContent = j.config.temp_reg_qmm;
-      document.getElementById('spReg').textContent = j.config.setpoint_reg_qmm;
       lastRtcIsoLocal = j.device_time_iso_local || lastRtcIsoLocal;
 
       if (j.ok) {
@@ -1408,7 +1401,9 @@ INDEX_HTML = """
 
 @app.route("/", methods=["GET"])
 def index() -> Response:
-    return Response(INDEX_HTML, mimetype="text/html")
+    app_title = "CAREL™ Supervisory System [Simulator]" if is_simulator_mode() else "CAREL™ Supervisory System"
+    html = INDEX_HTML.replace("{{APP_TITLE}}", app_title)
+    return Response(html, mimetype="text/html")
 
 
 @app.route("/logs", methods=["GET"])
