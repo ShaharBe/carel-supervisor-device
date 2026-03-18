@@ -992,8 +992,7 @@ INDEX_HTML = """
 
     <div class="row compact-action-row">
       <label>Setpoint (°C):</label>
-      <span class="setpoint-current">
-        <span class="setpoint-inline-label">Current:</span>
+      <span class="setpoint-current">        
         <span id="lsp">—</span>
       </span>
       <span class="setpoint-inline-label setpoint-new-label">New:</span>
@@ -1048,7 +1047,7 @@ INDEX_HTML = """
     <div class="footer-actions">
       <span id="systemStatus" class="muted">System actions</span>
       <div class="footer-buttons">
-        <a class="button-link" href="/logs" target="_blank" rel="noopener">Open Log</a>
+        <a class="button-link" href="logs" target="_blank" rel="noopener">Open Log</a>
         <button id="rebootBtn" class="danger-btn" type="button">Reboot</button>
       </div>
     </div>
