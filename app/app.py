@@ -827,8 +827,8 @@ INDEX_HTML = """
     }
     .small-btn { padding: 5px 10px; font-size: 0.88rem; }
     .setpoint-input {
-      width: 4.6ch;
-      min-width: 4.6ch;
+      width: 6.6ch;
+      min-width: 6.6ch;
       text-align: center;
       padding-left: 6px;
       padding-right: 6px;
