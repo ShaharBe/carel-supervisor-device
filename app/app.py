@@ -91,6 +91,7 @@ POLL_INTERVAL_S = 1.0      # temperature polling period
 # Scaling
 TEMP_SCALE = 10.0          # 249 -> 24.9
 SETPOINT_SCALE = 10.0      # assume same scaling for setpoint (common on Carel)
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 LOG_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "logs"))
 LOG_FILE = os.path.join(LOG_DIR, "app.log")
 LOG_MAX_BYTES = 512 * 1024
@@ -128,6 +129,23 @@ def setup_logging() -> logging.Logger:
 
   logging.getLogger("werkzeug").setLevel(logging.WARNING)
   return logger
+
+
+def read_git_commit_hash() -> str:
+  """Return the short git commit hash for the checked-out repo, if available."""
+  try:
+    result = subprocess.run(
+      ["git", "-C", REPO_ROOT, "rev-parse", "--short", "HEAD"],
+      check=True,
+      capture_output=True,
+      text=True,
+      timeout=5,
+    )
+  except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+    return "unknown"
+
+  commit_hash = result.stdout.strip()
+  return commit_hash or "unknown"
 
 
 def build_modbus_client(port: str):
@@ -195,6 +213,7 @@ cache_lock = threading.Lock()
 modbus_lock = threading.Lock()
 runtime_state_lock = threading.Lock()
 logger = setup_logging()
+APP_COMMIT_HASH = read_git_commit_hash()
 last_detected_port: Optional[str] = None
 last_adapter_missing = False
 last_connected_port: Optional[str] = None
@@ -930,6 +949,11 @@ INDEX_HTML = """
       gap: 10px;
       flex-wrap: wrap;
     }
+    .footer-meta {
+      width: 100%;
+      margin-top: -4px;
+      font-size: 0.72em;
+    }
     .danger-btn {
       border: 1px solid #d38b93;
       background: #fff3f4;
@@ -1050,6 +1074,7 @@ INDEX_HTML = """
         <a class="button-link" href="logs" target="_blank" rel="noopener">Open Log</a>
         <button id="rebootBtn" class="danger-btn" type="button">Reboot</button>
       </div>
+      <div class="muted footer-meta">Commit: {{APP_COMMIT_HASH}}</div>
     </div>
   </div>
 
@@ -1402,6 +1427,7 @@ INDEX_HTML = """
 def index() -> Response:
     app_title = "CAREL™ Supervisory System [Simulator]" if is_simulator_mode() else "CAREL™ Supervisory System"
     html = INDEX_HTML.replace("{{APP_TITLE}}", app_title)
+    html = html.replace("{{APP_COMMIT_HASH}}", APP_COMMIT_HASH)
     return Response(html, mimetype="text/html")
 
 
