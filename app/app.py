@@ -746,7 +746,7 @@ INDEX_HTML = """
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CAREL Modbus PoC</title>
+  <title>CAREL™ Supervisory System</title>
   <style>
     /* Base / Desktop styles */
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 28px; }
@@ -768,6 +768,16 @@ INDEX_HTML = """
       gap: 6px;
       min-height: 32px;
       color: #1f1f1f;
+    }
+    .compact-action-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: nowrap;
+    }
+    .compact-action-row label {
+      width: auto;
+      margin: 0;
     }
     .top-label { font-weight: 600; color: #484848; }
     .top-value { font-weight: 500; }
@@ -791,9 +801,38 @@ INDEX_HTML = """
     .status-dot-idle { background: #bdbdbd; }
     label { display: inline-block; width: 180px; }
     input { padding: 6px 8px; width: 120px; }
-    button { padding: 7px 12px; cursor: pointer; }
-    .small-btn { padding: 5px 10px; font-size: 0.92rem; }
-    .button-link { display: inline-block; padding: 7px 12px; border: 1px solid #bbb; border-radius: 8px; color: #111; text-decoration: none; }
+    button,
+    .button-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 6px 10px;
+      cursor: pointer;
+      border: 1px solid #d9c3a7;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.82);
+      color: #6b4a20;
+      font-size: 0.92rem;
+      font-weight: 600;
+      line-height: 1.2;
+      text-decoration: none;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    }
+    button:hover,
+    .button-link:hover { background: #fff7ef; }
+    button:disabled {
+      opacity: 0.55;
+      cursor: default;
+    }
+    .small-btn { padding: 5px 10px; font-size: 0.88rem; }
+    .setpoint-input {
+      width: 4.6ch;
+      min-width: 4.6ch;
+      text-align: center;
+      padding-left: 6px;
+      padding-right: 6px;
+    }
     .muted { color: #666; font-size: 0.92em; }
     .err { color: #b00020; }
     .ok { color: #0b6b0b; }
@@ -840,17 +879,7 @@ INDEX_HTML = """
     .alarm-pill-neutral { background: #efefef; color: #555; }
     .alarm-pill-clear { background: #e7f7ec; color: #0b6b0b; }
     .alarm-pill-active { background: #fff0f0; color: #b00020; }
-    .alarm-clear-btn {
-      padding: 6px 10px;
-      border-color: #d9c3a7;
-      background: rgba(255, 255, 255, 0.82);
-      color: #6b4a20;
-      font-size: 0.88rem;
-    }
-    .alarm-clear-btn:disabled {
-      opacity: 0.55;
-      cursor: default;
-    }
+    .alarm-clear-btn { font-size: 0.88rem; }
     .alarm-empty {
       margin-top: 8px;
       padding: 9px 11px;
@@ -881,10 +910,8 @@ INDEX_HTML = """
     }
     .danger-btn {
       border: 1px solid #d38b93;
-      border-radius: 10px;
       background: #fff3f4;
       color: #8c1d2c;
-      font-weight: 600;
     }
     .danger-btn:hover { background: #ffe6e9; }
     @keyframes statusPulse {
@@ -906,6 +933,13 @@ INDEX_HTML = """
       .inline-row { align-items: flex-start; }
       .top-strip { gap: 8px 14px; }
       .top-item { min-height: auto; }
+      .compact-action-row label { width: auto; margin-bottom: 0; }
+      .setpoint-input {
+        width: 4.8ch;
+        min-width: 4.8ch;
+        padding-left: 8px;
+        padding-right: 8px;
+      }
       .modal { width: 100%; padding: 16px; }
       .modal-actions { flex-direction: column; }
       .modal .field input { width: 100%; }
@@ -935,9 +969,9 @@ INDEX_HTML = """
       </div>
     </div>
 
-    <div class="row">
+    <div class="row compact-action-row">
       <label>Setpoint (°C):</label>
-      <input id="sp" type="number" step="0.1" placeholder="e.g. 28.0"/>
+      <input id="sp" class="setpoint-input" type="number" step="0.1" placeholder="28"/>
       <button id="setBtn">Write</button>
     </div>
 
