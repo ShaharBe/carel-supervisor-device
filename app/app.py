@@ -833,6 +833,22 @@ INDEX_HTML = """
       padding-left: 6px;
       padding-right: 6px;
     }
+    .setpoint-current {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      color: #3f3f3f;
+    }
+    .setpoint-inline-label {
+      color: #666;
+      font-size: 0.92em;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .setpoint-new-label {
+      margin-left: 16px;
+    }
     .muted { color: #666; font-size: 0.92em; }
     .err { color: #b00020; }
     .ok { color: #0b6b0b; }
@@ -908,6 +924,12 @@ INDEX_HTML = """
       gap: 12px;
       flex-wrap: wrap;
     }
+    .footer-buttons {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
     .danger-btn {
       border: 1px solid #d38b93;
       background: #fff3f4;
@@ -971,23 +993,13 @@ INDEX_HTML = """
 
     <div class="row compact-action-row">
       <label>Setpoint (°C):</label>
+      <span class="setpoint-current">
+        <span class="setpoint-inline-label">Current:</span>
+        <span id="lsp">—</span>
+      </span>
+      <span class="setpoint-inline-label setpoint-new-label">New:</span>
       <input id="sp" class="setpoint-input" type="number" step="0.1" placeholder="28"/>
       <button id="setBtn">Write</button>
-    </div>
-
-    <div class="row">
-      <label>Last write (UTC):</label>
-      <span class="muted" id="wts">—</span>
-    </div>
-
-    <div class="row">
-      <label>Current setpoint:</label>
-      <span id="lsp">—</span>
-    </div>
-
-    <div class="row">
-      <label>Diagnostics:</label>
-      <a class="button-link" href="/logs" target="_blank" rel="noopener">Open Log</a>
     </div>
 
     <section class="alarms-panel" aria-labelledby="alarmsTitle">
@@ -1040,7 +1052,10 @@ INDEX_HTML = """
     </div>
     <div class="footer-actions">
       <span id="systemStatus" class="muted">System actions</span>
-      <button id="rebootBtn" class="danger-btn" type="button">Reboot</button>
+      <div class="footer-buttons">
+        <a class="button-link" href="/logs" target="_blank" rel="noopener">Open Log</a>
+        <button id="rebootBtn" class="danger-btn" type="button">Reboot</button>
+      </div>
     </div>
   </div>
 
@@ -1209,11 +1224,8 @@ INDEX_HTML = """
         document.getElementById('deviceTime').textContent = '—';
       }
 
-      // write info
-      document.getElementById('wts').textContent = j.last_write_utc || '—';
       if (j.last_setpoint_c !== null && j.last_setpoint_c !== undefined) {
-        document.getElementById('lsp').textContent =
-          j.last_setpoint_c.toFixed(1) + ' °C (raw ' + j.last_setpoint_raw + ')';
+        document.getElementById('lsp').textContent = j.last_setpoint_c.toFixed(1) + ' °C';
       } else {
         document.getElementById('lsp').textContent = '—';
       }
