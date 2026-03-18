@@ -753,6 +753,42 @@ INDEX_HTML = """
     .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; max-width: 520px; }
     .row { margin: 10px 0; }
     .inline-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .top-strip {
+      display: flex;
+      align-items: center;
+      gap: 10px 18px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #eee;
+    }
+    .top-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 32px;
+      color: #1f1f1f;
+    }
+    .top-label { font-weight: 600; color: #484848; }
+    .top-value { font-weight: 500; }
+    .top-time { font-variant-numeric: tabular-nums; }
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #bdbdbd;
+      flex: 0 0 auto;
+    }
+    .status-dot-live {
+      background: #0b8a35;
+      box-shadow: 0 0 0 0 rgba(11, 138, 53, 0.35);
+      animation: statusPulse 1.2s ease-out infinite;
+    }
+    .status-dot-dead {
+      background: #b00020;
+      box-shadow: 0 0 0 1px rgba(176, 0, 32, 0.15);
+    }
+    .status-dot-idle { background: #bdbdbd; }
     label { display: inline-block; width: 180px; }
     input { padding: 6px 8px; width: 120px; }
     button { padding: 7px 12px; cursor: pointer; }
@@ -851,6 +887,11 @@ INDEX_HTML = """
       font-weight: 600;
     }
     .danger-btn:hover { background: #ffe6e9; }
+    @keyframes statusPulse {
+      0% { box-shadow: 0 0 0 0 rgba(11, 138, 53, 0.35); }
+      70% { box-shadow: 0 0 0 8px rgba(11, 138, 53, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(11, 138, 53, 0); }
+    }
 
     /* Phone layout (max-width 600px) */
     @media (max-width: 600px) {
@@ -863,6 +904,8 @@ INDEX_HTML = """
       .button-link { padding: 10px 16px; font-size: 16px; }
       .small-btn { padding: 8px 14px; font-size: 15px; }
       .inline-row { align-items: flex-start; }
+      .top-strip { gap: 8px 14px; }
+      .top-item { min-height: auto; }
       .modal { width: 100%; padding: 16px; }
       .modal-actions { flex-direction: column; }
       .modal .field input { width: 100%; }
@@ -876,31 +919,21 @@ INDEX_HTML = """
 <body>
   <h2>CAREL Modbus PoC</h2>
   <div class="card">
-    <div class="row">
-      <label>Temperature:</label>
-      <span id="temp">—</span>
-      <span class="muted" id="temp_raw"></span>
-    </div>
-
-    <div class="row">
-      <label>Status:</label>
-      <span id="status" class="muted">—</span>
-    </div>
-
-    <div class="row">
-      <label>Device date/time:</label>
-      <span class="inline-row">
-        <span id="deviceTime">—</span>
+    <div class="top-strip">
+      <div class="top-item">
+        <span class="top-label">Status:</span>
+        <span id="modbusStatusDot" class="status-dot status-dot-idle" aria-hidden="true"></span>
+        <span id="status" class="top-value muted">—</span>
+      </div>
+      <div class="top-item">
+        <span class="top-label">Temperature:</span>
+        <span id="temp" class="top-value">—</span>
+      </div>
+      <div class="top-item">
+        <span id="deviceTime" class="top-value top-time">—</span>
         <button id="editRtcBtn" class="small-btn" type="button">Edit</button>
-      </span>
+      </div>
     </div>
-
-    <div class="row">
-      <label>RTC status:</label>
-      <span id="rtcStatus" class="muted">—</span>
-    </div>
-
-    <hr/>
 
     <div class="row">
       <label>Setpoint (°C):</label>
@@ -1033,6 +1066,11 @@ INDEX_HTML = """
     badge.className = 'alarm-pill ' + mode;
   }
 
+  function setModbusIndicator(state) {
+    const dot = document.getElementById('modbusStatusDot');
+    dot.className = 'status-dot ' + state;
+  }
+
   function syncClearAlarmsButton() {
     const clearBtn = document.getElementById('clearAlarmsBtn');
     clearBtn.textContent = clearAlarmsBusy ? 'Clearing...' : 'Clear alarms';
@@ -1116,27 +1154,25 @@ INDEX_HTML = """
 
       if (j.ok) {
         document.getElementById('temp').textContent = j.temp_c.toFixed(1) + ' °C';
-        document.getElementById('temp_raw').textContent = '(raw ' + j.temp_raw + ')';
         document.getElementById('status').textContent = 'OK';
-        document.getElementById('status').className = 'ok';
+        document.getElementById('status').className = 'top-value ok';
+        document.getElementById('status').title = 'Latest Modbus poll succeeded.';
+        setModbusIndicator('status-dot-live');
       } else {
-        document.getElementById('status').textContent = j.error || 'No data';
-        document.getElementById('status').className = 'err';
+        document.getElementById('temp').textContent = '—';
+        document.getElementById('status').textContent = 'Error';
+        document.getElementById('status').className = 'top-value err';
+        document.getElementById('status').title = j.error || 'No data';
+        setModbusIndicator('status-dot-dead');
       }
 
       if (j.device_time_display) {
         document.getElementById('deviceTime').textContent = j.device_time_display;
-        document.getElementById('rtcStatus').textContent = j.last_rtc_write_utc
-          ? ('Last RTC write: ' + j.last_rtc_write_utc)
-          : (j.last_rtc_update_utc || 'RTC OK');
-        document.getElementById('rtcStatus').className = 'muted';
         if (!rtcModalOpen && j.device_time_iso_local) {
           document.getElementById('rtcInput').value = j.device_time_iso_local;
         }
       } else {
         document.getElementById('deviceTime').textContent = '—';
-        document.getElementById('rtcStatus').textContent = j.rtc_error || 'No RTC data';
-        document.getElementById('rtcStatus').className = 'err';
       }
 
       // write info
@@ -1182,8 +1218,12 @@ INDEX_HTML = """
 
       renderAlarms(j.alarms);
     } catch (e) {
-      document.getElementById('status').textContent = 'UI error: ' + e;
-      document.getElementById('status').className = 'err';
+      document.getElementById('status').textContent = 'UI error';
+      document.getElementById('status').className = 'top-value err';
+      document.getElementById('status').title = String(e);
+      document.getElementById('temp').textContent = '—';
+      document.getElementById('deviceTime').textContent = '—';
+      setModbusIndicator('status-dot-dead');
       setAlarmBadge('alarm-pill-neutral', 'UI error');
       document.getElementById('alarmsEmpty').textContent = 'Unable to render alarms.';
       document.getElementById('alarmsHint').textContent = String(e);
