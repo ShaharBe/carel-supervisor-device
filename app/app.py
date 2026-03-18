@@ -951,7 +951,7 @@ INDEX_HTML = """
   </style>
 </head>
 <body>
-  <h2>CAREL Modbus PoC</h2>
+  <h2>CAREL™ Supervisory System</h2>
   <div class="card">
     <div class="top-strip">
       <div class="top-item">
