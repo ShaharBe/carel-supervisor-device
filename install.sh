@@ -1,10 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR=/opt/carel-supervisor
 SERVICE_NAME=carel-supervisor.service
 SERVICE_PATH=/etc/systemd/system/$SERVICE_NAME
 APP_ENV_FILE=$APP_DIR/carel-supervisor.env
+APP_COMMIT_HASH="$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
 echo "Creating install directory..."
 sudo mkdir -p $APP_DIR
@@ -13,8 +15,8 @@ sudo mkdir -p $APP_DIR
 sudo chown -R pi:pi $APP_DIR
 
 echo "Copying files..."
-cp -r app $APP_DIR/
-cp requirements.txt $APP_DIR/
+cp -r "$SCRIPT_DIR/app" $APP_DIR/
+cp "$SCRIPT_DIR/requirements.txt" $APP_DIR/
 
 echo "Creating Python virtual environment..."
 python3 -m venv $APP_DIR/venv
@@ -26,11 +28,10 @@ echo "Ensuring log directory exists..."
 sudo install -d -o pi -g pi $APP_DIR/logs
 
 echo "Writing runtime environment file..."
-APP_COMMIT_HASH="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 printf 'APP_COMMIT_HASH=%s\n' "$APP_COMMIT_HASH" > "$APP_ENV_FILE"
 
 echo "Installing systemd service..."
-sudo cp $SERVICE_NAME $SERVICE_PATH
+sudo cp "$SCRIPT_DIR/$SERVICE_NAME" $SERVICE_PATH
 sudo systemctl daemon-reload
 sudo systemctl enable --now $SERVICE_NAME
 
