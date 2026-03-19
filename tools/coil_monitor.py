@@ -8,11 +8,11 @@ Usage (on Pi):
   sudo systemctl stop carel-supervisor
 
   # Run with venv Python (unbuffered for real-time output)
-  /opt/carel-supervisor/venv/bin/python -u /opt/carel-supervisor/tools/coil_monitor.py
+  /opt/carel-supervisor/venv/bin/python -u /opt/carel-supervisor/repo/tools/coil_monitor.py
 
   # Or with options:
-  /opt/carel-supervisor/venv/bin/python -u /opt/carel-supervisor/tools/coil_monitor.py --interval 0.3
-
+  /opt/carel-supervisor/venv/bin/python -u /opt/carel-supervisor/repo/tools/coil_monitor.py --interval 0.3
+    
 Interactive control:
   - While running, type a coil address and press Enter to toggle it.
   - Accepted formats: 42, D42, D,42
