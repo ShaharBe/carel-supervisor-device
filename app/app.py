@@ -846,15 +846,17 @@ INDEX_HTML = """
       white-space: nowrap;
       color: #3f3f3f;
     }
-    .setpoint-inline-label {
-      color: #666;
-      font-size: 0.92em;
-      font-weight: 600;
-      white-space: nowrap;
+    .setpoint-editor {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-left: 8px;
+      padding: 4px 8px;
+      border: 1px solid #e6d5c1;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.85);
     }
-    .setpoint-new-label {
-      margin-left: 16px;
-    }
+    .setpoint-editor[hidden] { display: none !important; }
     .muted { color: #666; font-size: 0.92em; }
     .err { color: #b00020; }
     .ok { color: #0b6b0b; }
@@ -973,6 +975,13 @@ INDEX_HTML = """
         padding-left: 8px;
         padding-right: 8px;
       }
+      .setpoint-editor {
+        width: 100%;
+        margin-left: 0;
+        margin-top: 8px;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+      }
       .modal { width: 100%; padding: 16px; }
       .modal-actions { flex-direction: column; }
       .modal .field input { width: 100%; }
@@ -1006,9 +1015,12 @@ INDEX_HTML = """
       <span class="setpoint-current">        
         <span id="lsp">—</span>
       </span>
-      <span class="setpoint-inline-label setpoint-new-label">New:</span>
-      <input id="sp" class="setpoint-input" type="number" step="0.1" placeholder="28"/>
-      <button id="setBtn">Write</button>
+      <button id="editSetpointBtn" class="small-btn" type="button" disabled>Edit</button>
+      <span id="setpointEditor" class="setpoint-editor" hidden>
+        <input id="setpointInput" class="setpoint-input" type="number" step="0.1" inputmode="decimal" />
+        <button id="saveSetpointBtn" class="small-btn" type="button">Save</button>
+        <button id="cancelSetpointBtn" class="small-btn" type="button">Cancel</button>
+      </span>
     </div>
 
     <section class="alarms-panel" aria-labelledby="alarmsTitle">
@@ -1088,6 +1100,7 @@ INDEX_HTML = """
 <script>
   let rtcModalOpen = false;
   let lastRtcIsoLocal = null;
+  let lastSetpointC = null;
   let lastAlarmState = null;
   let clearAlarmsBusy = false;
 
@@ -1113,6 +1126,25 @@ INDEX_HTML = """
     rtcModalOpen = false;
     document.getElementById('rtcModalBackdrop').classList.remove('open');
     document.getElementById('rtcModalBackdrop').setAttribute('aria-hidden', 'true');
+  }
+
+  function openSetpointEditor() {
+    if (lastSetpointC === null || lastSetpointC === undefined) {
+      return;
+    }
+
+    document.getElementById('editSetpointBtn').hidden = true;
+    document.getElementById('setpointEditor').hidden = false;
+
+    const input = document.getElementById('setpointInput');
+    input.value = lastSetpointC.toFixed(1);
+    input.focus();
+    input.select();
+  }
+
+  function closeSetpointEditor() {
+    document.getElementById('setpointEditor').hidden = true;
+    document.getElementById('editSetpointBtn').hidden = false;
   }
 
   function setAlarmBadge(mode, text) {
@@ -1228,7 +1260,10 @@ INDEX_HTML = """
         document.getElementById('deviceTime').textContent = '—';
       }
 
-      if (j.last_setpoint_c !== null && j.last_setpoint_c !== undefined) {
+      const hasSetpoint = j.last_setpoint_c !== null && j.last_setpoint_c !== undefined;
+      lastSetpointC = hasSetpoint ? j.last_setpoint_c : null;
+      document.getElementById('editSetpointBtn').disabled = !hasSetpoint;
+      if (hasSetpoint) {
         document.getElementById('lsp').textContent = j.last_setpoint_c.toFixed(1) + ' °C';
       } else {
         document.getElementById('lsp').textContent = '—';
@@ -1311,19 +1346,38 @@ INDEX_HTML = """
     await refresh();
   }
 
-  async function writeSetpoint() {
-    const v = Number(document.getElementById('sp').value);
+  async function saveSetpoint() {
+    const input = document.getElementById('setpointInput');
+    const saveBtn = document.getElementById('saveSetpointBtn');
+    const cancelBtn = document.getElementById('cancelSetpointBtn');
+    const v = Number(input.value);
     if (!Number.isFinite(v)) {
       alert('Enter a valid setpoint (°C).');
       return;
     }
+
+    input.disabled = true;
+    saveBtn.disabled = true;
+    cancelBtn.disabled = true;
+
     const r = await fetch('api/setpoint', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ temp_c: v })
     });
     const j = await r.json();
-    if (!j.ok) alert('Write failed: ' + (j.error || 'unknown'));
+    input.disabled = false;
+    saveBtn.disabled = false;
+    cancelBtn.disabled = false;
+
+    if (!j.ok) {
+      alert('Write failed: ' + (j.error || 'unknown'));
+      input.focus();
+      input.select();
+      return;
+    }
+
+    closeSetpointEditor();
     await refresh();
   }
 
@@ -1374,7 +1428,18 @@ INDEX_HTML = """
     }
   }
 
-  document.getElementById('setBtn').addEventListener('click', writeSetpoint);
+  document.getElementById('editSetpointBtn').addEventListener('click', openSetpointEditor);
+  document.getElementById('saveSetpointBtn').addEventListener('click', saveSetpoint);
+  document.getElementById('cancelSetpointBtn').addEventListener('click', closeSetpointEditor);
+  document.getElementById('setpointInput').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      saveSetpoint();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      closeSetpointEditor();
+    }
+  });
   document.getElementById('editRtcBtn').addEventListener('click', openRtcModal);
   document.getElementById('cancelRtcBtn').addEventListener('click', closeRtcModal);
   document.getElementById('saveRtcBtn').addEventListener('click', saveRtc);
