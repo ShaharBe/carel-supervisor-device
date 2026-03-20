@@ -36,6 +36,7 @@ from pymodbus.client import ModbusSerialClient
 # Coil definitions (D address -> description)
 # D addresses are Modbus-aligned per CAREL docs
 COIL_DEFS: Dict[int, str] = {
+    8:  "remote on/off from network: 0 = ue disabled, 1 = ue enabled",
     42: "drain for strong demand reduction",
     43: "long-inactivity drain",
     44: "total periodical flush",
