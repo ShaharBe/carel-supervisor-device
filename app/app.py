@@ -82,6 +82,9 @@ INFO_BLOCK2_START_REG = 165   # qmm 165 -> addr 164
 INFO_BLOCK2_COUNT = 3         # I,165..I,167
 
 # Coil addresses for controls (D addresses are Modbus-aligned per user docs)
+HUMIDIFIER_STATUS_REG = 136   # I,136 -> humidifier status input register
+HUMIDIFIER_REMOTE_ONOFF_COIL = 8   # D,8 -> remote on/off from network
+HUMIDIFIER_SUPERVISOR_ENABLE_COIL = 81  # D,81 -> enable remote on/off from supervisor
 DRAIN_CYL1_COIL = 52          # D,52 -> cylinder 1 manual drain
 ALARM_RESET_COIL = 51         # D,51 -> alarm reset pulse
 # Alarm coils are loaded from app/modbus_alarms.csv and use direct Modbus 0-based coil addresses.
@@ -188,6 +191,7 @@ class Cache:
     info_cyl2_hours: Optional[int] = None
     info_voltage_type: Optional[int] = None
     info_error: Optional[str] = None
+    humidifier_network_enabled: Optional[bool] = None
     cyl1_drain_on: Optional[bool] = None
     alarms_has_active: Optional[bool] = None
     alarms_active: list[dict[str, Any]] = field(default_factory=list)
@@ -213,6 +217,7 @@ client = build_modbus_client(active_com_port)
 
 TEMP_ADDR = qmm_to_modbus_addr(TEMP_REG)
 SETPOINT_ADDR = qmm_to_modbus_addr(SETPOINT_REG)
+HUMIDIFIER_STATUS_ADDR = qmm_to_modbus_addr(HUMIDIFIER_STATUS_REG)
 RTC_READ_START_ADDR = qmm_to_modbus_addr(RTC_READ_HOUR_REG)
 RTC_READ_COUNT = 6
 # Coil addresses are direct (not qmm converted) - already 0-indexed Modbus addresses
@@ -491,6 +496,14 @@ def read_holding_registers(address: int, count: int):
   except TypeError:
     return reader(address=address, count=count, slave=SLAVE_ID)
 
+def read_input_registers(address: int, count: int):
+  """Support both current pymodbus (`device_id`) and older/simulated (`slave`) clients."""
+  reader = cast(Any, client.read_input_registers)
+  try:
+    return reader(address=address, count=count, device_id=SLAVE_ID)
+  except TypeError:
+    return reader(address=address, count=count, slave=SLAVE_ID)
+
 def write_register(address: int, value: int):
   """Support both current pymodbus (`device_id`) and older/simulated (`slave`) clients."""
   writer = cast(Any, client.write_register)
@@ -654,8 +667,7 @@ def poll_registers_once() -> None:
       raise RuntimeError(f"Modbus read error (info block 2): {info2_rr}")
 
     with cache_lock:
-      # Block 1: I,136..I,142 -> humidifier_status, conductivity, (138 skip), cyl1_phase, cyl1_status, cyl2_phase, cyl2_status
-      cache.info_humidifier_status = int(info1_rr.registers[0])  # I,136
+      # Block 1: I,136..I,142 -> (I,136 sampled separately from the input register), conductivity, (138 skip), cyl1_phase, cyl1_status, cyl2_phase, cyl2_status
       cache.info_conductivity = int(info1_rr.registers[1])       # I,137
       # info1_rr.registers[2] is I,138 (manual conductivity) - skip
       cache.info_cyl1_phase = int(info1_rr.registers[3])         # I,139
@@ -672,6 +684,24 @@ def poll_registers_once() -> None:
     error_message = normalize_modbus_error(e)
     with cache_lock:
       cache.info_error = error_message
+
+  # Poll humidifier status separately from the live input register because it can change outside the UI.
+  try:
+    with modbus_lock:
+      modbus_connect_or_raise()
+      humidifier_status_rr = read_input_registers(address=HUMIDIFIER_STATUS_ADDR, count=1)
+
+    if humidifier_status_rr.isError():
+      raise RuntimeError(f"Modbus read error (humidifier status): {humidifier_status_rr}")
+    if not humidifier_status_rr.registers:
+      raise RuntimeError("Modbus read returned no humidifier status registers")
+
+    with cache_lock:
+      cache.info_humidifier_status = int(humidifier_status_rr.registers[0])
+  except Exception:
+    reset_modbus_client()
+    with cache_lock:
+      cache.info_humidifier_status = None
 
   # Poll alarm summary coil first, then scan the full alarm bank only when active.
   try:
@@ -716,20 +746,25 @@ def poll_registers_once() -> None:
       cache.alarms_last_scan_utc = now_iso()
       cache.alarms_error = error_message
 
-  # Poll drain coil state
+  # Poll humidifier remote on/off and drain coil states.
   try:
     with modbus_lock:
       modbus_connect_or_raise()
+      humidifier_rr = read_coils(address=HUMIDIFIER_REMOTE_ONOFF_COIL, count=1)
       drain_rr = read_coils(address=DRAIN_CYL1_COIL, count=1)
 
+    if humidifier_rr.isError():
+      raise RuntimeError(f"Modbus read error (humidifier remote on/off coil): {humidifier_rr}")
     if drain_rr.isError():
       raise RuntimeError(f"Modbus read error (drain coil): {drain_rr}")
 
     with cache_lock:
+      cache.humidifier_network_enabled = bool(humidifier_rr.bits[0]) if humidifier_rr.bits else None
       cache.cyl1_drain_on = bool(drain_rr.bits[0]) if drain_rr.bits else None
-  except Exception as e:
+  except Exception:
     reset_modbus_client()
     with cache_lock:
+      cache.humidifier_network_enabled = None
       cache.cyl1_drain_on = None
 
 def poller_loop(stop_evt: threading.Event) -> None:
@@ -1000,6 +1035,15 @@ INDEX_HTML = """
       <button id="editSetpointBtn" class="small-btn" type="button" disabled>Edit</button>
     </div>
 
+    <div class="row compact-action-row">
+      <label>Humidifier:</label>
+      <span class="setpoint-current">
+        <span class="top-label">Status:</span>
+        <span id="humidifierStatus">—</span>
+      </span>
+      <button id="humidifierToggleBtn" class="small-btn" type="button" disabled>—</button>
+    </div>
+
     <section class="alarms-panel" aria-labelledby="alarmsTitle">
       <div class="alarms-head">
         <div>
@@ -1093,11 +1137,21 @@ INDEX_HTML = """
     </div>
   </div>
 
-<script>
+  <script>
   let rtcModalOpen = false;
   let setpointModalOpen = false;
   let lastRtcIsoLocal = null;
   let lastSetpointC = null;
+  const humidifierStatusMap = {
+    0: 'On duty',
+    1: 'Alarm(s) present',
+    2: 'Disabled via network',
+    3: 'Disabled by timer',
+    4: 'Disabled by remote on/off',
+    5: 'Disabled by keyboard',
+    6: 'Manual control',
+    7: 'No demand'
+  };
   let lastAlarmState = null;
   let clearAlarmsBusy = false;
 
@@ -1269,14 +1323,29 @@ INDEX_HTML = """
         document.getElementById('lsp').textContent = '—';
       }
 
+      const humidifierStatus = j.info?.humidifier_status;
+      document.getElementById('humidifierStatus').textContent =
+        humidifierStatusMap[humidifierStatus] ?? humidifierStatus ?? '—';
+      const humidifierToggleBtn = document.getElementById('humidifierToggleBtn');
+      const humidifierNetworkEnabled = j.info?.humidifier_network_enabled;
+      if (humidifierNetworkEnabled === true) {
+        humidifierToggleBtn.textContent = 'Off';
+        humidifierToggleBtn.disabled = false;
+      } else if (humidifierNetworkEnabled === false) {
+        humidifierToggleBtn.textContent = 'On';
+        humidifierToggleBtn.disabled = false;
+      } else {
+        humidifierToggleBtn.textContent = '—';
+        humidifierToggleBtn.disabled = true;
+      }
+
       // Info accordion
       if (j.info) {
-        const humStatMap = {0:'On duty', 1:'Alarm(s)', 2:'Disabled (network)', 3:'Disabled (timer)', 4:'Disabled (remote)', 5:'Disabled (keyboard)', 6:'Manual', 7:'No demand'};
         const phaseMap = {0:'Not active', 1:'Softstart', 2:'Start', 3:'Steady state', 4:'Reduced', 5:'Delayed stop', 6:'Full flush', 7:'Fast Start', 8:'Fast Start (foam)', 9:'Fast Start (heating)'};
         const statusMap = {0:'No production', 1:'Start evap', 2:'Water fill', 3:'Producing', 4:'Drain (deciding)', 5:'Drain (pump)', 6:'Drain (closing)', 7:'Blocked', 8:'Inactivity drain', 9:'Flushing', 10:'Manual drain', 11:'No supply water', 12:'Periodic drain'};
         const voltMap = {0:'200V', 1:'208V', 2:'230V', 3:'400V', 4:'460V', 5:'575V'};
 
-        document.getElementById('infoHumStatus').textContent = humStatMap[j.info.humidifier_status] ?? j.info.humidifier_status ?? '—';
+        document.getElementById('infoHumStatus').textContent = humidifierStatusMap[j.info.humidifier_status] ?? j.info.humidifier_status ?? '—';
         document.getElementById('infoConductivity').textContent = j.info.conductivity ?? '—';
         document.getElementById('infoCyl1Phase').textContent = phaseMap[j.info.cyl1_phase] ?? j.info.cyl1_phase ?? '—';
         document.getElementById('infoCyl1Status').textContent = statusMap[j.info.cyl1_status] ?? j.info.cyl1_status ?? '—';
@@ -1308,6 +1377,9 @@ INDEX_HTML = """
       document.getElementById('status').title = String(e);
       document.getElementById('temp').textContent = '—';
       document.getElementById('deviceTime').textContent = '—';
+      document.getElementById('humidifierStatus').textContent = '—';
+      document.getElementById('humidifierToggleBtn').textContent = '—';
+      document.getElementById('humidifierToggleBtn').disabled = true;
       setModbusIndicator('status-dot-dead');
       setAlarmBadge('alarm-pill-neutral', 'UI error');
       document.getElementById('alarmsEmpty').textContent = 'Unable to render alarms.';
@@ -1413,6 +1485,22 @@ INDEX_HTML = """
     }
   }
 
+  async function toggleHumidifier() {
+    const btn = document.getElementById('humidifierToggleBtn');
+    btn.disabled = true;
+    try {
+      const r = await fetch('api/humidifier-toggle', { method: 'POST' });
+      const j = await r.json();
+      if (!j.ok) {
+        alert('Humidifier toggle failed: ' + (j.error || 'unknown'));
+      }
+    } catch (e) {
+      alert('Humidifier toggle failed: ' + e);
+    } finally {
+      await refresh();
+    }
+  }
+
   async function rebootDevice() {
     const shouldReboot = window.confirm('Are you sure you want to reboot the device?');
     if (!shouldReboot) return;
@@ -1471,6 +1559,7 @@ INDEX_HTML = """
       closeSetpointModal();
     }
   });
+  document.getElementById('humidifierToggleBtn').addEventListener('click', toggleHumidifier);
   document.getElementById('drainCyl1Btn').addEventListener('click', async () => {
     const btn = document.getElementById('drainCyl1Btn');
     btn.disabled = true;
@@ -1533,6 +1622,7 @@ def api_temp():
             },
             "info": {
                 "humidifier_status": cache.info_humidifier_status,
+                "humidifier_network_enabled": cache.humidifier_network_enabled,
                 "conductivity": cache.info_conductivity,
                 "cyl1_phase": cache.info_cyl1_phase,
                 "cyl1_status": cache.info_cyl1_status,
@@ -1671,6 +1761,40 @@ def api_setpoint():
         with cache_lock:
           cache.last_error = error_message
         return jsonify({"ok": False, "error": cache.last_error}), 400
+
+
+@app.route("/api/humidifier-toggle", methods=["POST"])
+def api_humidifier_toggle():
+    """Toggle the humidifier network on/off coil after enabling supervisor control."""
+    try:
+        body = request.get_json(force=True, silent=True) or {}
+        if "on" in body:
+            target_state = bool(body["on"])
+        else:
+            with cache_lock:
+                current = cache.humidifier_network_enabled
+            target_state = not current if current is not None else True
+
+        with modbus_lock:
+            modbus_connect_or_raise()
+            enable_wr = write_coil(address=HUMIDIFIER_SUPERVISOR_ENABLE_COIL, value=True)
+            if enable_wr.isError():
+                raise RuntimeError(f"Modbus write error (humidifier supervisor enable coil): {enable_wr}")
+            onoff_wr = write_coil(address=HUMIDIFIER_REMOTE_ONOFF_COIL, value=target_state)
+        if onoff_wr.isError():
+            raise RuntimeError(f"Modbus write error (humidifier remote on/off coil): {onoff_wr}")
+
+        with cache_lock:
+            cache.humidifier_network_enabled = target_state
+            if not target_state:
+                cache.info_humidifier_status = 2
+
+        logger.info("Humidifier remote on/off set to %s on %s", "ON" if target_state else "OFF", active_com_port)
+        return jsonify({"ok": True, "humidifier_network_enabled": target_state})
+    except Exception as e:
+        reset_modbus_client()
+        error_message = normalize_modbus_error(e)
+        return jsonify({"ok": False, "error": error_message}), 400
 
 
 @app.route("/api/cyl1-drain", methods=["POST"])

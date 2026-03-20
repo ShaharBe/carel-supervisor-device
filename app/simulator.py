@@ -13,6 +13,9 @@ from typing import List, Dict, Optional
 
 
 ALARM_RESET_COIL = 51
+HUMIDIFIER_STATUS_ADDR = 135
+HUMIDIFIER_REMOTE_ONOFF_COIL = 8
+HUMIDIFIER_SUPERVISOR_ENABLE_COIL = 81
 
 
 @dataclass
@@ -71,8 +74,11 @@ class SimulatorClient:
         self._holding_registers[161] = now.day
         self._holding_registers[162] = now.month
         self._holding_registers[163] = now.year % 100
+        self._input_registers[HUMIDIFIER_STATUS_ADDR] = 0
         self._coils[ALARM_CATALOG.summary.address] = False
         self._coils[ALARM_RESET_COIL] = False
+        self._coils[HUMIDIFIER_REMOTE_ONOFF_COIL] = True
+        self._coils[HUMIDIFIER_SUPERVISOR_ENABLE_COIL] = True
         self._coils[52] = False
 
     def _clear_alarm_coils(self) -> None:
@@ -196,6 +202,8 @@ class SimulatorClient:
             return SimulatedResponse(_is_error=True, _error_msg="Not connected")
 
         self._coils[address] = bool(value)
+        if address == HUMIDIFIER_REMOTE_ONOFF_COIL:
+            self._input_registers[HUMIDIFIER_STATUS_ADDR] = 0 if bool(value) else 2
         if address == ALARM_RESET_COIL and value:
             self._clear_alarm_coils()
         print(f"[SIMULATOR] Write coil {address} = {bool(value)}")
