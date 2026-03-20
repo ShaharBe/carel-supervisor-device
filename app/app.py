@@ -846,17 +846,6 @@ INDEX_HTML = """
       white-space: nowrap;
       color: #3f3f3f;
     }
-    .setpoint-editor {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      margin-left: 8px;
-      padding: 4px 8px;
-      border: 1px solid #e6d5c1;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.85);
-    }
-    .setpoint-editor[hidden] { display: none !important; }
     .muted { color: #666; font-size: 0.92em; }
     .err { color: #b00020; }
     .ok { color: #0b6b0b; }
@@ -975,13 +964,6 @@ INDEX_HTML = """
         padding-left: 8px;
         padding-right: 8px;
       }
-      .setpoint-editor {
-        width: 100%;
-        margin-left: 0;
-        margin-top: 8px;
-        justify-content: flex-start;
-        flex-wrap: wrap;
-      }
       .modal { width: 100%; padding: 16px; }
       .modal-actions { flex-direction: column; }
       .modal .field input { width: 100%; }
@@ -1016,11 +998,6 @@ INDEX_HTML = """
         <span id="lsp">—</span>
       </span>
       <button id="editSetpointBtn" class="small-btn" type="button" disabled>Edit</button>
-      <span id="setpointEditor" class="setpoint-editor" hidden>
-        <input id="setpointInput" class="setpoint-input" type="number" step="0.1" inputmode="decimal" />
-        <button id="saveSetpointBtn" class="small-btn" type="button">Save</button>
-        <button id="cancelSetpointBtn" class="small-btn" type="button">Cancel</button>
-      </span>
     </div>
 
     <section class="alarms-panel" aria-labelledby="alarmsTitle">
@@ -1097,8 +1074,28 @@ INDEX_HTML = """
     </div>
   </div>
 
+  <div id="setpointModalBackdrop" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="setpointModalTitle">
+      <h3 id="setpointModalTitle">Edit Setpoint</h3>
+      <div class="muted">Enter the new temperature setpoint.</div>
+
+      <div class="field">
+        <label for="setpointInput">Setpoint (°C)</label>
+        <input id="setpointInput" class="setpoint-input" type="number" step="0.1" inputmode="decimal" />
+      </div>
+
+      <div class="modal-actions">
+        <button id="saveSetpointBtn" type="button">Save</button>
+        <button id="cancelSetpointBtn" type="button">Cancel</button>
+      </div>
+
+      <div id="setpointModalStatus" class="modal-status muted"></div>
+    </div>
+  </div>
+
 <script>
   let rtcModalOpen = false;
+  let setpointModalOpen = false;
   let lastRtcIsoLocal = null;
   let lastSetpointC = null;
   let lastAlarmState = null;
@@ -1128,23 +1125,26 @@ INDEX_HTML = """
     document.getElementById('rtcModalBackdrop').setAttribute('aria-hidden', 'true');
   }
 
-  function openSetpointEditor() {
+  function openSetpointModal() {
     if (lastSetpointC === null || lastSetpointC === undefined) {
       return;
     }
 
-    document.getElementById('editSetpointBtn').hidden = true;
-    document.getElementById('setpointEditor').hidden = false;
-
+    setpointModalOpen = true;
+    document.getElementById('setpointModalBackdrop').classList.add('open');
+    document.getElementById('setpointModalBackdrop').setAttribute('aria-hidden', 'false');
+    document.getElementById('setpointModalStatus').textContent = '';
+    document.getElementById('setpointModalStatus').className = 'modal-status muted';
     const input = document.getElementById('setpointInput');
     input.value = lastSetpointC.toFixed(1);
     input.focus();
     input.select();
   }
 
-  function closeSetpointEditor() {
-    document.getElementById('setpointEditor').hidden = true;
-    document.getElementById('editSetpointBtn').hidden = false;
+  function closeSetpointModal() {
+    setpointModalOpen = false;
+    document.getElementById('setpointModalBackdrop').classList.remove('open');
+    document.getElementById('setpointModalBackdrop').setAttribute('aria-hidden', 'true');
   }
 
   function setAlarmBadge(mode, text) {
@@ -1348,36 +1348,49 @@ INDEX_HTML = """
 
   async function saveSetpoint() {
     const input = document.getElementById('setpointInput');
+    const modalStatus = document.getElementById('setpointModalStatus');
     const saveBtn = document.getElementById('saveSetpointBtn');
     const cancelBtn = document.getElementById('cancelSetpointBtn');
     const v = Number(input.value);
     if (!Number.isFinite(v)) {
-      alert('Enter a valid setpoint (°C).');
+      modalStatus.textContent = 'Enter a valid setpoint (°C).';
+      modalStatus.className = 'modal-status err';
       return;
     }
 
+    modalStatus.textContent = 'Saving...';
+    modalStatus.className = 'modal-status muted';
     input.disabled = true;
     saveBtn.disabled = true;
     cancelBtn.disabled = true;
 
-    const r = await fetch('api/setpoint', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ temp_c: v })
-    });
-    const j = await r.json();
-    input.disabled = false;
-    saveBtn.disabled = false;
-    cancelBtn.disabled = false;
-
-    if (!j.ok) {
-      alert('Write failed: ' + (j.error || 'unknown'));
+    try {
+      const r = await fetch('api/setpoint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ temp_c: v })
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        modalStatus.textContent = 'Write failed: ' + (j.error || 'unknown');
+        modalStatus.className = 'modal-status err';
+        input.focus();
+        input.select();
+        return;
+      }
+    } catch (e) {
+      modalStatus.textContent = 'Write failed: ' + e;
+      modalStatus.className = 'modal-status err';
       input.focus();
       input.select();
       return;
+    } finally {
+      input.disabled = false;
+      saveBtn.disabled = false;
+      cancelBtn.disabled = false;
     }
 
-    closeSetpointEditor();
+    closeSetpointModal();
     await refresh();
   }
 
@@ -1428,16 +1441,16 @@ INDEX_HTML = """
     }
   }
 
-  document.getElementById('editSetpointBtn').addEventListener('click', openSetpointEditor);
+  document.getElementById('editSetpointBtn').addEventListener('click', openSetpointModal);
   document.getElementById('saveSetpointBtn').addEventListener('click', saveSetpoint);
-  document.getElementById('cancelSetpointBtn').addEventListener('click', closeSetpointEditor);
+  document.getElementById('cancelSetpointBtn').addEventListener('click', closeSetpointModal);
   document.getElementById('setpointInput').addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       event.preventDefault();
       saveSetpoint();
     } else if (event.key === 'Escape') {
       event.preventDefault();
-      closeSetpointEditor();
+      closeSetpointModal();
     }
   });
   document.getElementById('editRtcBtn').addEventListener('click', openRtcModal);
@@ -1451,6 +1464,11 @@ INDEX_HTML = """
   document.getElementById('rtcModalBackdrop').addEventListener('click', (event) => {
     if (event.target.id === 'rtcModalBackdrop') {
       closeRtcModal();
+    }
+  });
+  document.getElementById('setpointModalBackdrop').addEventListener('click', (event) => {
+    if (event.target.id === 'setpointModalBackdrop') {
+      closeSetpointModal();
     }
   });
   document.getElementById('drainCyl1Btn').addEventListener('click', async () => {
