@@ -16,6 +16,9 @@ ALARM_RESET_COIL = 51
 HUMIDIFIER_STATUS_ADDR = 135
 HUMIDIFIER_REMOTE_ONOFF_COIL = 8
 HUMIDIFIER_SUPERVISOR_ENABLE_COIL = 81
+MAX_PRODUCTION_ADDR = 14
+SETPOINT_ADDR = 19
+PROP_BAND_ADDR = 20
 
 
 @dataclass
@@ -58,8 +61,12 @@ class SimulatorClient:
         """Set up default register values for simulation."""
         # Temperature register (addr 1, 0-based) = 249 -> 24.9°C
         self._holding_registers[1] = 249
-        # Setpoint register (addr 19, 0-based) = 280 -> 28.0°C
-        self._holding_registers[19] = 280
+        # A,14 maximum production -> addr 14 = 1000 -> 100.0%
+        self._holding_registers[MAX_PRODUCTION_ADDR] = 1000
+        # A,19 temperature set point -> addr 19 = 280 -> 28.0°C
+        self._holding_registers[SETPOINT_ADDR] = 280
+        # A,20 temperature differential -> addr 20 = 20 -> 2.0°C
+        self._holding_registers[PROP_BAND_ADDR] = 20
 
         now = datetime.now()
         self._holding_registers[152] = now.hour

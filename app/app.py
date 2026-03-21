@@ -49,7 +49,9 @@ USB_SERIAL_SHORT = "586D012821"
 # QModMaster-style 1-based register numbers (as you see in your tool)
 TEMP_REG = 2               # You said: "main temp (addr 1)" earlier, but later confirmed reg 2=249 -> 24.9C
                            # Put the exact register number you read temp from in QModMaster here.
-SETPOINT_REG = 20          # Setpoint register (QModMaster-style)
+SETPOINT_REG = 20          # qmm 20 -> A,19 temperature set point
+MAX_PRODUCTION_REG = 15    # qmm 15 -> A,14 maximum production
+PROP_BAND_REG = 21         # qmm 21 -> A,20 temperature differential
 RTC_READ_HOUR_REG = 154
 RTC_READ_MINUTE_REG = 155
 RTC_READ_DAY_REG = 156
@@ -94,6 +96,8 @@ POLL_INTERVAL_S = 1.0      # temperature polling period
 # Scaling
 TEMP_SCALE = 10.0          # 249 -> 24.9
 SETPOINT_SCALE = 10.0      # assume same scaling for setpoint (common on Carel)
+MAX_PRODUCTION_SCALE = 10.0
+PROP_BAND_SCALE = 10.0
 LOG_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "logs"))
 LOG_FILE = os.path.join(LOG_DIR, "app.log")
 LOG_MAX_BYTES = 512 * 1024
@@ -173,6 +177,10 @@ class Cache:
     last_write_utc: Optional[str] = None
     last_setpoint_raw: Optional[int] = None
     last_setpoint_c: Optional[float] = None
+    max_production_raw: Optional[int] = None
+    max_production_pct: Optional[float] = None
+    prop_band_raw: Optional[int] = None
+    prop_band_c: Optional[float] = None
     device_time_iso_local: Optional[str] = None
     device_time_display: Optional[str] = None
     device_time_weekday: Optional[int] = None
@@ -217,6 +225,8 @@ client = build_modbus_client(active_com_port)
 
 TEMP_ADDR = qmm_to_modbus_addr(TEMP_REG)
 SETPOINT_ADDR = qmm_to_modbus_addr(SETPOINT_REG)
+MAX_PRODUCTION_ADDR = qmm_to_modbus_addr(MAX_PRODUCTION_REG)
+PROP_BAND_ADDR = qmm_to_modbus_addr(PROP_BAND_REG)
 HUMIDIFIER_STATUS_ADDR = qmm_to_modbus_addr(HUMIDIFIER_STATUS_REG)
 RTC_READ_START_ADDR = qmm_to_modbus_addr(RTC_READ_HOUR_REG)
 RTC_READ_COUNT = 6
@@ -594,32 +604,50 @@ def write_device_rtc(value: datetime, current_raw_year: Optional[int]) -> None:
   )
 
 def poll_registers_once() -> None:
-  """Read temperature, setpoint, and device RTC registers, update cache."""
+  """Read temperature, writable analog values, and device RTC registers, update cache."""
   try:
     with modbus_lock:
       modbus_connect_or_raise()
       temp_rr = read_holding_registers(address=TEMP_ADDR, count=1)
+      max_production_rr = read_holding_registers(address=MAX_PRODUCTION_ADDR, count=1)
       sp_rr = read_holding_registers(address=SETPOINT_ADDR, count=1)
+      prop_band_rr = read_holding_registers(address=PROP_BAND_ADDR, count=1)
 
     if temp_rr.isError():
       raise RuntimeError(f"Modbus read error (temp): {temp_rr}")
+    if max_production_rr.isError():
+      raise RuntimeError(f"Modbus read error (max production): {max_production_rr}")
     if sp_rr.isError():
       raise RuntimeError(f"Modbus read error (setpoint): {sp_rr}")
+    if prop_band_rr.isError():
+      raise RuntimeError(f"Modbus read error (prop. band): {prop_band_rr}")
     if not temp_rr.registers:
       raise RuntimeError("Modbus read returned no temperature registers")
+    if not max_production_rr.registers:
+      raise RuntimeError("Modbus read returned no max production registers")
     if not sp_rr.registers:
       raise RuntimeError("Modbus read returned no setpoint registers")
+    if not prop_band_rr.registers:
+      raise RuntimeError("Modbus read returned no prop. band registers")
 
     temp_raw = int(temp_rr.registers[0])
     temp_c = temp_raw / TEMP_SCALE
+    max_production_raw = int(max_production_rr.registers[0])
+    max_production_pct = max_production_raw / MAX_PRODUCTION_SCALE
     sp_raw = int(sp_rr.registers[0])
     sp_c = sp_raw / SETPOINT_SCALE
+    prop_band_raw = int(prop_band_rr.registers[0])
+    prop_band_c = prop_band_raw / PROP_BAND_SCALE
 
     with cache_lock:
       cache.temp_raw = temp_raw
       cache.temp_c = temp_c
+      cache.max_production_raw = max_production_raw
+      cache.max_production_pct = max_production_pct
       cache.last_setpoint_raw = sp_raw
       cache.last_setpoint_c = sp_c
+      cache.prop_band_raw = prop_band_raw
+      cache.prop_band_c = prop_band_c
       cache.last_update_utc = now_iso()
       cache.last_error = None
     clear_runtime_error()
@@ -1044,6 +1072,22 @@ INDEX_HTML = """
       <button id="humidifierToggleBtn" class="small-btn" type="button" disabled>—</button>
     </div>
 
+    <div class="row compact-action-row">
+      <label>Max Production:</label>
+      <span class="setpoint-current">
+        <span id="maxProductionValue">—</span>
+      </span>
+      <button id="editMaxProductionBtn" class="small-btn" type="button" disabled>Edit</button>
+    </div>
+
+    <div class="row compact-action-row">
+      <label>Prop. band:</label>
+      <span class="setpoint-current">
+        <span id="propBandValue">—</span>
+      </span>
+      <button id="editPropBandBtn" class="small-btn" type="button" disabled>Edit</button>
+    </div>
+
     <section class="alarms-panel" aria-labelledby="alarmsTitle">
       <div class="alarms-head">
         <div>
@@ -1137,11 +1181,53 @@ INDEX_HTML = """
     </div>
   </div>
 
+  <div id="maxProductionModalBackdrop" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="maxProductionModalTitle">
+      <h3 id="maxProductionModalTitle">Edit Max Production</h3>
+      <div class="muted">Enter the maximum production value.</div>
+
+      <div class="field">
+        <label for="maxProductionInput">Max Production (%)</label>
+        <input id="maxProductionInput" class="setpoint-input" type="number" step="0.1" inputmode="decimal" />
+      </div>
+
+      <div class="modal-actions">
+        <button id="saveMaxProductionBtn" type="button">Save</button>
+        <button id="cancelMaxProductionBtn" type="button">Cancel</button>
+      </div>
+
+      <div id="maxProductionModalStatus" class="modal-status muted"></div>
+    </div>
+  </div>
+
+  <div id="propBandModalBackdrop" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="propBandModalTitle">
+      <h3 id="propBandModalTitle">Edit Prop. Band</h3>
+      <div class="muted">Enter the temperature differential value.</div>
+
+      <div class="field">
+        <label for="propBandInput">Prop. band (°C)</label>
+        <input id="propBandInput" class="setpoint-input" type="number" step="0.1" inputmode="decimal" />
+      </div>
+
+      <div class="modal-actions">
+        <button id="savePropBandBtn" type="button">Save</button>
+        <button id="cancelPropBandBtn" type="button">Cancel</button>
+      </div>
+
+      <div id="propBandModalStatus" class="modal-status muted"></div>
+    </div>
+  </div>
+
   <script>
   let rtcModalOpen = false;
   let setpointModalOpen = false;
+  let maxProductionModalOpen = false;
+  let propBandModalOpen = false;
   let lastRtcIsoLocal = null;
   let lastSetpointC = null;
+  let lastMaxProductionPct = null;
+  let lastPropBandC = null;
   const humidifierStatusMap = {
     0: 'On duty',
     1: 'Alarm(s) present',
@@ -1199,6 +1285,50 @@ INDEX_HTML = """
     setpointModalOpen = false;
     document.getElementById('setpointModalBackdrop').classList.remove('open');
     document.getElementById('setpointModalBackdrop').setAttribute('aria-hidden', 'true');
+  }
+
+  function openMaxProductionModal() {
+    if (lastMaxProductionPct === null || lastMaxProductionPct === undefined) {
+      return;
+    }
+
+    maxProductionModalOpen = true;
+    document.getElementById('maxProductionModalBackdrop').classList.add('open');
+    document.getElementById('maxProductionModalBackdrop').setAttribute('aria-hidden', 'false');
+    document.getElementById('maxProductionModalStatus').textContent = '';
+    document.getElementById('maxProductionModalStatus').className = 'modal-status muted';
+    const input = document.getElementById('maxProductionInput');
+    input.value = lastMaxProductionPct.toFixed(1);
+    input.focus();
+    input.select();
+  }
+
+  function closeMaxProductionModal() {
+    maxProductionModalOpen = false;
+    document.getElementById('maxProductionModalBackdrop').classList.remove('open');
+    document.getElementById('maxProductionModalBackdrop').setAttribute('aria-hidden', 'true');
+  }
+
+  function openPropBandModal() {
+    if (lastPropBandC === null || lastPropBandC === undefined) {
+      return;
+    }
+
+    propBandModalOpen = true;
+    document.getElementById('propBandModalBackdrop').classList.add('open');
+    document.getElementById('propBandModalBackdrop').setAttribute('aria-hidden', 'false');
+    document.getElementById('propBandModalStatus').textContent = '';
+    document.getElementById('propBandModalStatus').className = 'modal-status muted';
+    const input = document.getElementById('propBandInput');
+    input.value = lastPropBandC.toFixed(1);
+    input.focus();
+    input.select();
+  }
+
+  function closePropBandModal() {
+    propBandModalOpen = false;
+    document.getElementById('propBandModalBackdrop').classList.remove('open');
+    document.getElementById('propBandModalBackdrop').setAttribute('aria-hidden', 'true');
   }
 
   function setAlarmBadge(mode, text) {
@@ -1323,6 +1453,24 @@ INDEX_HTML = """
         document.getElementById('lsp').textContent = '—';
       }
 
+      const hasMaxProduction = j.max_production_pct !== null && j.max_production_pct !== undefined;
+      lastMaxProductionPct = hasMaxProduction ? j.max_production_pct : null;
+      document.getElementById('editMaxProductionBtn').disabled = !hasMaxProduction;
+      if (hasMaxProduction) {
+        document.getElementById('maxProductionValue').textContent = j.max_production_pct.toFixed(1) + ' %';
+      } else {
+        document.getElementById('maxProductionValue').textContent = '—';
+      }
+
+      const hasPropBand = j.prop_band_c !== null && j.prop_band_c !== undefined;
+      lastPropBandC = hasPropBand ? j.prop_band_c : null;
+      document.getElementById('editPropBandBtn').disabled = !hasPropBand;
+      if (hasPropBand) {
+        document.getElementById('propBandValue').textContent = j.prop_band_c.toFixed(1) + ' °C';
+      } else {
+        document.getElementById('propBandValue').textContent = '—';
+      }
+
       const humidifierStatus = j.info?.humidifier_status;
       document.getElementById('humidifierStatus').textContent =
         humidifierStatusMap[humidifierStatus] ?? humidifierStatus ?? '—';
@@ -1377,6 +1525,10 @@ INDEX_HTML = """
       document.getElementById('status').title = String(e);
       document.getElementById('temp').textContent = '—';
       document.getElementById('deviceTime').textContent = '—';
+      document.getElementById('maxProductionValue').textContent = '—';
+      document.getElementById('propBandValue').textContent = '—';
+      document.getElementById('editMaxProductionBtn').disabled = true;
+      document.getElementById('editPropBandBtn').disabled = true;
       document.getElementById('humidifierStatus').textContent = '—';
       document.getElementById('humidifierToggleBtn').textContent = '—';
       document.getElementById('humidifierToggleBtn').disabled = true;
@@ -1466,6 +1618,102 @@ INDEX_HTML = """
     await refresh();
   }
 
+  async function saveMaxProduction() {
+    const input = document.getElementById('maxProductionInput');
+    const modalStatus = document.getElementById('maxProductionModalStatus');
+    const saveBtn = document.getElementById('saveMaxProductionBtn');
+    const cancelBtn = document.getElementById('cancelMaxProductionBtn');
+    const v = Number(input.value);
+    if (!Number.isFinite(v)) {
+      modalStatus.textContent = 'Enter a valid maximum production (%).';
+      modalStatus.className = 'modal-status err';
+      return;
+    }
+
+    modalStatus.textContent = 'Saving...';
+    modalStatus.className = 'modal-status muted';
+    input.disabled = true;
+    saveBtn.disabled = true;
+    cancelBtn.disabled = true;
+
+    try {
+      const r = await fetch('api/max-production', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value_pct: v })
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        modalStatus.textContent = 'Write failed: ' + (j.error || 'unknown');
+        modalStatus.className = 'modal-status err';
+        input.focus();
+        input.select();
+        return;
+      }
+    } catch (e) {
+      modalStatus.textContent = 'Write failed: ' + e;
+      modalStatus.className = 'modal-status err';
+      input.focus();
+      input.select();
+      return;
+    } finally {
+      input.disabled = false;
+      saveBtn.disabled = false;
+      cancelBtn.disabled = false;
+    }
+
+    closeMaxProductionModal();
+    await refresh();
+  }
+
+  async function savePropBand() {
+    const input = document.getElementById('propBandInput');
+    const modalStatus = document.getElementById('propBandModalStatus');
+    const saveBtn = document.getElementById('savePropBandBtn');
+    const cancelBtn = document.getElementById('cancelPropBandBtn');
+    const v = Number(input.value);
+    if (!Number.isFinite(v)) {
+      modalStatus.textContent = 'Enter a valid prop. band (°C).';
+      modalStatus.className = 'modal-status err';
+      return;
+    }
+
+    modalStatus.textContent = 'Saving...';
+    modalStatus.className = 'modal-status muted';
+    input.disabled = true;
+    saveBtn.disabled = true;
+    cancelBtn.disabled = true;
+
+    try {
+      const r = await fetch('api/prop-band', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value_c: v })
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        modalStatus.textContent = 'Write failed: ' + (j.error || 'unknown');
+        modalStatus.className = 'modal-status err';
+        input.focus();
+        input.select();
+        return;
+      }
+    } catch (e) {
+      modalStatus.textContent = 'Write failed: ' + e;
+      modalStatus.className = 'modal-status err';
+      input.focus();
+      input.select();
+      return;
+    } finally {
+      input.disabled = false;
+      saveBtn.disabled = false;
+      cancelBtn.disabled = false;
+    }
+
+    closePropBandModal();
+    await refresh();
+  }
+
   async function clearAlarms() {
     clearAlarmsBusy = true;
     syncClearAlarmsButton();
@@ -1541,6 +1789,30 @@ INDEX_HTML = """
       closeSetpointModal();
     }
   });
+  document.getElementById('editMaxProductionBtn').addEventListener('click', openMaxProductionModal);
+  document.getElementById('saveMaxProductionBtn').addEventListener('click', saveMaxProduction);
+  document.getElementById('cancelMaxProductionBtn').addEventListener('click', closeMaxProductionModal);
+  document.getElementById('maxProductionInput').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      saveMaxProduction();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      closeMaxProductionModal();
+    }
+  });
+  document.getElementById('editPropBandBtn').addEventListener('click', openPropBandModal);
+  document.getElementById('savePropBandBtn').addEventListener('click', savePropBand);
+  document.getElementById('cancelPropBandBtn').addEventListener('click', closePropBandModal);
+  document.getElementById('propBandInput').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      savePropBand();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      closePropBandModal();
+    }
+  });
   document.getElementById('editRtcBtn').addEventListener('click', openRtcModal);
   document.getElementById('cancelRtcBtn').addEventListener('click', closeRtcModal);
   document.getElementById('saveRtcBtn').addEventListener('click', saveRtc);
@@ -1557,6 +1829,16 @@ INDEX_HTML = """
   document.getElementById('setpointModalBackdrop').addEventListener('click', (event) => {
     if (event.target.id === 'setpointModalBackdrop') {
       closeSetpointModal();
+    }
+  });
+  document.getElementById('maxProductionModalBackdrop').addEventListener('click', (event) => {
+    if (event.target.id === 'maxProductionModalBackdrop') {
+      closeMaxProductionModal();
+    }
+  });
+  document.getElementById('propBandModalBackdrop').addEventListener('click', (event) => {
+    if (event.target.id === 'propBandModalBackdrop') {
+      closePropBandModal();
     }
   });
   document.getElementById('humidifierToggleBtn').addEventListener('click', toggleHumidifier);
@@ -1606,6 +1888,10 @@ def api_temp():
             "last_write_utc": cache.last_write_utc,
             "last_setpoint_raw": cache.last_setpoint_raw,
             "last_setpoint_c": cache.last_setpoint_c,
+            "max_production_raw": cache.max_production_raw,
+            "max_production_pct": cache.max_production_pct,
+            "prop_band_raw": cache.prop_band_raw,
+            "prop_band_c": cache.prop_band_c,
             "device_time_iso_local": cache.device_time_iso_local,
             "device_time_display": cache.device_time_display,
             "device_time_weekday": cache.device_time_weekday,
@@ -1648,6 +1934,8 @@ def api_temp():
             "slave_id": SLAVE_ID,
             "temp_reg_qmm": TEMP_REG,
             "setpoint_reg_qmm": SETPOINT_REG,
+            "max_production_reg_qmm": MAX_PRODUCTION_REG,
+            "prop_band_reg_qmm": PROP_BAND_REG,
             "rtc_read_regs_qmm": {
               "hour": RTC_READ_HOUR_REG,
               "minute": RTC_READ_MINUTE_REG,
@@ -1754,6 +2042,86 @@ def api_setpoint():
         clear_runtime_error()
 
         return jsonify({"ok": True, "temp_c": cache.last_setpoint_c, "raw": cache.last_setpoint_raw})
+    except Exception as e:
+        reset_modbus_client()
+        error_message = normalize_modbus_error(e)
+        note_runtime_error(error_message)
+        with cache_lock:
+          cache.last_error = error_message
+        return jsonify({"ok": False, "error": cache.last_error}), 400
+
+
+@app.route("/api/max-production", methods=["POST"])
+def api_max_production():
+    try:
+        body = request.get_json(force=True, silent=False)
+        if not isinstance(body, dict) or "value_pct" not in body:
+            raise ValueError("JSON must include 'value_pct'")
+
+        value_pct = float(body["value_pct"])
+        max_production_raw = int(round(value_pct * MAX_PRODUCTION_SCALE))
+        if not (0 <= max_production_raw <= 65535):
+            raise ValueError("scaled value out of 16-bit range")
+
+        with modbus_lock:
+          modbus_connect_or_raise()
+          wr = write_register(address=MAX_PRODUCTION_ADDR, value=max_production_raw)
+        if wr.isError():
+          raise RuntimeError(f"Modbus write error: {wr}")
+
+        with cache_lock:
+            cache.last_write_utc = now_iso()
+            cache.max_production_raw = max_production_raw
+            cache.max_production_pct = max_production_raw / MAX_PRODUCTION_SCALE
+            cache.last_error = None
+        logger.info("Max production written successfully: %.1f %% on %s", value_pct, active_com_port)
+        clear_runtime_error()
+
+        return jsonify({
+            "ok": True,
+            "value_pct": cache.max_production_pct,
+            "raw": cache.max_production_raw,
+        })
+    except Exception as e:
+        reset_modbus_client()
+        error_message = normalize_modbus_error(e)
+        note_runtime_error(error_message)
+        with cache_lock:
+          cache.last_error = error_message
+        return jsonify({"ok": False, "error": cache.last_error}), 400
+
+
+@app.route("/api/prop-band", methods=["POST"])
+def api_prop_band():
+    try:
+        body = request.get_json(force=True, silent=False)
+        if not isinstance(body, dict) or "value_c" not in body:
+            raise ValueError("JSON must include 'value_c'")
+
+        value_c = float(body["value_c"])
+        prop_band_raw = int(round(value_c * PROP_BAND_SCALE))
+        if not (0 <= prop_band_raw <= 65535):
+            raise ValueError("scaled value out of 16-bit range")
+
+        with modbus_lock:
+          modbus_connect_or_raise()
+          wr = write_register(address=PROP_BAND_ADDR, value=prop_band_raw)
+        if wr.isError():
+          raise RuntimeError(f"Modbus write error: {wr}")
+
+        with cache_lock:
+            cache.last_write_utc = now_iso()
+            cache.prop_band_raw = prop_band_raw
+            cache.prop_band_c = prop_band_raw / PROP_BAND_SCALE
+            cache.last_error = None
+        logger.info("Prop. band written successfully: %.1f C on %s", value_c, active_com_port)
+        clear_runtime_error()
+
+        return jsonify({
+            "ok": True,
+            "value_c": cache.prop_band_c,
+            "raw": cache.prop_band_raw,
+        })
     except Exception as e:
         reset_modbus_client()
         error_message = normalize_modbus_error(e)
