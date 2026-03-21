@@ -96,7 +96,7 @@ POLL_INTERVAL_S = 1.0      # temperature polling period
 # Scaling
 TEMP_SCALE = 10.0          # 249 -> 24.9
 SETPOINT_SCALE = 10.0      # assume same scaling for setpoint (common on Carel)
-MAX_PRODUCTION_SCALE = 10.0
+MAX_PRODUCTION_SCALE = 1.0 # assume percentage is direct (1000 -> 100.0%), adjust if you see different values in QModMaster
 PROP_BAND_SCALE = 10.0
 LOG_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "logs"))
 LOG_FILE = os.path.join(LOG_DIR, "app.log")
