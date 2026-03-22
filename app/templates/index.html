@@ -4,22 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{{APP_TITLE}}</title>
-  <script>
-    (function () {
-      const assetBaseUrl = new URL(window.location.href);
-      assetBaseUrl.hash = '';
-      assetBaseUrl.search = '';
-      if (!assetBaseUrl.pathname.endsWith('/')) {
-        assetBaseUrl.pathname += '/';
-      }
-      window.__assetBaseUrl = assetBaseUrl.href;
-
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = new URL('static/app.css', assetBaseUrl).href;
-      document.head.appendChild(link);
-    })();
-  </script>
+  <link rel="stylesheet" href="static/app.css"/>
 </head>
 <body>
   <h2>{{APP_TITLE}}</h2>
@@ -204,22 +189,6 @@
     </div>
   </div>
 
-  <script>
-    (function () {
-      const assetBaseUrl = window.__assetBaseUrl || (() => {
-        const url = new URL(window.location.href);
-        url.hash = '';
-        url.search = '';
-        if (!url.pathname.endsWith('/')) {
-          url.pathname += '/';
-        }
-        return url.href;
-      })();
-
-      const script = document.createElement('script');
-      script.src = new URL('static/app.js', assetBaseUrl).href;
-      document.body.appendChild(script);
-    })();
-  </script>
+  <script src="static/app.js"></script>
 </body>
 </html>
