@@ -703,8 +703,20 @@ def poller_loop(stop_evt: threading.Event) -> None:
 
 
 stop_event = threading.Event()
+poller_thread: Optional[threading.Thread] = None
 
 
 def start_background_poller() -> None:
-    thread = threading.Thread(target=poller_loop, args=(stop_event,), daemon=True)
-    thread.start()
+    global poller_thread
+    with runtime_state_lock:
+        if poller_thread is not None and poller_thread.is_alive():
+            return
+        if stop_event.is_set():
+            stop_event.clear()
+        poller_thread = threading.Thread(
+            target=poller_loop,
+            args=(stop_event,),
+            daemon=True,
+            name="carel-poller",
+        )
+        poller_thread.start()

@@ -496,10 +496,11 @@ def api_reboot():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
 
-# Start poller when module loads (works with both `python app.py` and `flask run`)
-# Guard against Flask's reloader which spawns two processes - only run in the worker
-if os.environ.get('WERKZEUG_RUN_MAIN') == 'true' or os.environ.get('FLASK_DEBUG') != '1':
-    start_background_poller()
+
+def start_runtime_if_needed() -> None:
+    """Start background runtime work explicitly during real app startup."""
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or os.environ.get("FLASK_DEBUG") != "1":
+        start_background_poller()
 
 
 def main() -> None:
@@ -509,6 +510,7 @@ def main() -> None:
     # Preflight read (optional) so you see something quickly
     time.sleep(0.2)
     poll_registers_once()
+    start_runtime_if_needed()
 
     # Run Flask dev server (fine for PoC)
     # If you want a steadier Windows server, use waitress:
