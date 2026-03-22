@@ -1,0 +1,194 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{{APP_TITLE}}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}"/>
+</head>
+<body>
+  <h2>{{APP_TITLE}}</h2>
+  <div class="card">
+    <div class="top-strip">
+      <div class="top-item">
+        <span class="top-label">Status:</span>
+        <span id="modbusStatusDot" class="status-dot status-dot-idle" aria-hidden="true"></span>
+        <span id="status" class="top-value muted">&mdash;</span>
+      </div>
+      <div class="top-item">
+        <span class="top-label">Temperature:</span>
+        <span id="temp" class="top-value">&mdash;</span>
+      </div>
+      <div class="top-item">
+        <span id="deviceTime" class="top-value top-time">&mdash;</span>
+        <button id="editRtcBtn" class="small-btn" type="button">Edit</button>
+      </div>
+    </div>
+
+    <div class="row compact-action-row">
+      <label>Setpoint (&deg;C):</label>
+      <span class="setpoint-current">        
+        <span id="lsp">&mdash;</span>
+      </span>
+      <button id="editSetpointBtn" class="small-btn" type="button" disabled>Edit</button>
+    </div>
+
+    <div class="row compact-action-row">
+      <label>Humidifier:</label>
+      <span class="setpoint-current">
+        <span class="top-label">Status:</span>
+        <span id="humidifierStatus">&mdash;</span>
+      </span>
+      <button id="humidifierToggleBtn" class="small-btn" type="button" disabled>&mdash;</button>
+    </div>
+
+    <div class="row compact-action-row">
+      <label>Max Production:</label>
+      <span class="setpoint-current">
+        <span id="maxProductionValue">&mdash;</span>
+      </span>
+      <button id="editMaxProductionBtn" class="small-btn" type="button" disabled>Edit</button>
+    </div>
+
+    <div class="row compact-action-row">
+      <label>Prop. band:</label>
+      <span class="setpoint-current">
+        <span id="propBandValue">&mdash;</span>
+      </span>
+      <button id="editPropBandBtn" class="small-btn" type="button" disabled>Edit</button>
+    </div>
+
+    <section class="alarms-panel" aria-labelledby="alarmsTitle">
+      <div class="alarms-head">
+        <div>
+          <h3 id="alarmsTitle" class="alarms-title">Alarms</h3>
+        </div>
+        <div class="alarms-actions">
+          <span id="alarmsBadge" class="alarm-pill alarm-pill-neutral">Checking...</span>
+          <button id="clearAlarmsBtn" class="small-btn alarm-clear-btn" type="button" disabled>Clear alarms</button>
+        </div>
+      </div>
+      <div id="alarmsEmpty" class="alarm-empty">Waiting for alarm status...</div>
+      <div id="alarmsList" class="alarm-list"></div>
+      <div id="alarmsHint" class="muted alarm-hint"></div>
+    </section>
+
+    <details>
+      <summary>Info</summary>
+      <div class="info-grid">
+        <span class="info-label">Humidifier status:</span>
+        <span class="info-value" id="infoHumStatus">&mdash;</span>
+        <span class="info-label">Conductivity:</span>
+        <span class="info-value" id="infoConductivity">&mdash;</span>
+        <span class="info-label">Cyl 1 phase:</span>
+        <span class="info-value" id="infoCyl1Phase">&mdash;</span>
+        <span class="info-label">Cyl 1 status:</span>
+        <span class="info-value" id="infoCyl1Status">&mdash;</span>
+        <span class="info-label">Cyl 2 phase:</span>
+        <span class="info-value" id="infoCyl2Phase">&mdash;</span>
+        <span class="info-label">Cyl 2 status:</span>
+        <span class="info-value" id="infoCyl2Status">&mdash;</span>
+        <span class="info-label">Cyl 1 hours:</span>
+        <span class="info-value" id="infoCyl1Hours">&mdash;</span>
+        <span class="info-label">Cyl 2 hours:</span>
+        <span class="info-value" id="infoCyl2Hours">&mdash;</span>
+        <span class="info-label">Voltage type:</span>
+        <span class="info-value" id="infoVoltage">&mdash;</span>
+        <span class="info-label">Cyl 1 drain:</span>
+        <span class="info-value">
+          <button id="drainCyl1Btn" class="small-btn" type="button">&mdash;</button>
+        </span>
+      </div>
+      <div id="infoError" class="muted"></div>
+    </details>
+
+    <div class="footer-actions">
+      <span id="systemStatus" class="muted">System actions</span>
+      <div class="footer-buttons">
+        <a class="button-link" href="logs" target="_blank" rel="noopener">Open Log</a>
+        <button id="rebootBtn" class="danger-btn" type="button">Reboot</button>
+      </div>
+      <div class="muted footer-meta">Commit: {{APP_COMMIT_HASH}}</div>
+    </div>
+  </div>
+
+  <div id="rtcModalBackdrop" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="rtcModalTitle">
+      <h3 id="rtcModalTitle">Edit Device Date/Time</h3>
+      <div class="muted">Use the device local date/time shown by the controller.</div>
+
+      <div class="field">
+        <label for="rtcInput">Device date/time</label>
+        <input id="rtcInput" type="datetime-local" step="60" />
+      </div>
+
+      <div class="modal-actions">
+        <button id="useBrowserTimeBtn" type="button">Use Browser Time</button>
+        <button id="saveRtcBtn" type="button">Save</button>
+        <button id="cancelRtcBtn" type="button">Cancel</button>
+      </div>
+
+      <div id="rtcModalStatus" class="modal-status muted"></div>
+    </div>
+  </div>
+
+  <div id="setpointModalBackdrop" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="setpointModalTitle">
+      <h3 id="setpointModalTitle">Edit Setpoint</h3>
+      <div class="muted">Enter the new temperature setpoint.</div>
+
+      <div class="field">
+        <label for="setpointInput">Setpoint (&deg;C)</label>
+        <input id="setpointInput" class="setpoint-input" type="number" step="0.1" inputmode="decimal" />
+      </div>
+
+      <div class="modal-actions">
+        <button id="saveSetpointBtn" type="button">Save</button>
+        <button id="cancelSetpointBtn" type="button">Cancel</button>
+      </div>
+
+      <div id="setpointModalStatus" class="modal-status muted"></div>
+    </div>
+  </div>
+
+  <div id="maxProductionModalBackdrop" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="maxProductionModalTitle">
+      <h3 id="maxProductionModalTitle">Edit Max Production</h3>
+      <div class="muted">Enter the maximum production value.</div>
+
+      <div class="field">
+        <label for="maxProductionInput">Max Production (%)</label>
+        <input id="maxProductionInput" class="setpoint-input" type="number" step="0.1" inputmode="decimal" />
+      </div>
+
+      <div class="modal-actions">
+        <button id="saveMaxProductionBtn" type="button">Save</button>
+        <button id="cancelMaxProductionBtn" type="button">Cancel</button>
+      </div>
+
+      <div id="maxProductionModalStatus" class="modal-status muted"></div>
+    </div>
+  </div>
+
+  <div id="propBandModalBackdrop" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="propBandModalTitle">
+      <h3 id="propBandModalTitle">Edit Prop. Band</h3>
+      <div class="muted">Enter the temperature differential value.</div>
+
+      <div class="field">
+        <label for="propBandInput">Prop. band (&deg;C)</label>
+        <input id="propBandInput" class="setpoint-input" type="number" step="0.1" inputmode="decimal" />
+      </div>
+
+      <div class="modal-actions">
+        <button id="savePropBandBtn" type="button">Save</button>
+        <button id="cancelPropBandBtn" type="button">Cancel</button>
+      </div>
+
+      <div id="propBandModalStatus" class="modal-status muted"></div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
