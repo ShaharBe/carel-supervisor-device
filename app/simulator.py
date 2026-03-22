@@ -5,27 +5,33 @@ Simulates register reads/writes in memory - no actual Modbus communication.
 Mimics the pymodbus ModbusSerialClient interface.
 """
 
-from alarms import ALARM_CATALOG
-from datetime import datetime
+from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Dict, Optional
+from datetime import datetime
+from typing import Dict, List, Optional
 
-
-ALARM_RESET_COIL = 51
-HUMIDIFIER_STATUS_ADDR = 135
-HUMIDIFIER_REMOTE_ONOFF_COIL = 8
-HUMIDIFIER_SUPERVISOR_ENABLE_COIL = 81
-MAX_PRODUCTION_ADDR = 14
-SETPOINT_ADDR = 19
-PROP_BAND_ADDR = 20
+from alarms import ALARM_CATALOG
+from modbus_map import (
+    ALARM_RESET_COIL,
+    DRAIN_CYL1_COIL,
+    HUMIDIFIER_REMOTE_ONOFF_COIL,
+    HUMIDIFIER_STATUS_ADDR,
+    HUMIDIFIER_SUPERVISOR_ENABLE_COIL,
+    MAX_PRODUCTION_ADDR,
+    PROP_BAND_ADDR,
+    RTC_READ_ADDRS,
+    RTC_WRITE_ADDRS,
+    RTC_WRITE_TO_READ_ADDR,
+    SETPOINT_ADDR,
+    TEMP_ADDR,
+)
 
 
 @dataclass
 class SimulatedResponse:
-    """
-    Mimics pymodbus response object.
-    """
+    """Mimics a pymodbus response object."""
+
     registers: Optional[List[int]] = None
     bits: Optional[List[bool]] = None
     _is_error: bool = False
@@ -49,7 +55,7 @@ class SimulatorClient:
     """
 
     def __init__(self, **kwargs):
-        # Accept same kwargs as ModbusSerialClient but ignore them
+        # Accept the same kwargs as ModbusSerialClient but ignore them.
         self._holding_registers: Dict[int, int] = {}
         self._input_registers: Dict[int, int] = {}
         self._coils: Dict[int, bool] = {}
@@ -57,42 +63,50 @@ class SimulatorClient:
         self._initialize_defaults()
         print("[SIMULATOR] Client created (no real hardware)")
 
-    def _initialize_defaults(self):
+    def _initialize_defaults(self) -> None:
         """Set up default register values for simulation."""
-        # Temperature register (addr 1, 0-based) = 249 -> 24.9°C
-        self._holding_registers[1] = 249
-        # A,14 maximum production -> addr 14 = 1000 -> 100.0%
+        self._holding_registers[TEMP_ADDR] = 249
         self._holding_registers[MAX_PRODUCTION_ADDR] = 1000
-        # A,19 temperature set point -> addr 19 = 280 -> 28.0°C
         self._holding_registers[SETPOINT_ADDR] = 280
-        # A,20 temperature differential -> addr 20 = 20 -> 2.0°C
         self._holding_registers[PROP_BAND_ADDR] = 20
 
-        now = datetime.now()
-        self._holding_registers[152] = now.hour
-        self._holding_registers[153] = now.minute
-        self._holding_registers[154] = now.day
-        self._holding_registers[155] = now.month
-        self._holding_registers[156] = now.year % 100
-        self._holding_registers[157] = now.weekday()
-        self._holding_registers[158] = now.weekday()
-        self._holding_registers[159] = now.hour
-        self._holding_registers[160] = now.minute
-        self._holding_registers[161] = now.day
-        self._holding_registers[162] = now.month
-        self._holding_registers[163] = now.year % 100
+        self._set_device_rtc(datetime.now())
         self._input_registers[HUMIDIFIER_STATUS_ADDR] = 0
         self._coils[ALARM_CATALOG.summary.address] = False
         self._coils[ALARM_RESET_COIL] = False
         self._coils[HUMIDIFIER_REMOTE_ONOFF_COIL] = True
         self._coils[HUMIDIFIER_SUPERVISOR_ENABLE_COIL] = True
-        self._coils[52] = False
+        self._coils[DRAIN_CYL1_COIL] = False
+
+    def _set_device_rtc(self, value: datetime) -> None:
+        """Populate both the readable RTC block and the editable shadow block."""
+        carel_weekday = value.weekday() + 1
+        encoded_year = value.year % 100
+
+        self._holding_registers[RTC_READ_ADDRS["hour"]] = value.hour
+        self._holding_registers[RTC_READ_ADDRS["minute"]] = value.minute
+        self._holding_registers[RTC_READ_ADDRS["day"]] = value.day
+        self._holding_registers[RTC_READ_ADDRS["month"]] = value.month
+        self._holding_registers[RTC_READ_ADDRS["year"]] = encoded_year
+        self._holding_registers[RTC_READ_ADDRS["weekday"]] = carel_weekday
+
+        self._holding_registers[RTC_WRITE_ADDRS["weekday"]] = carel_weekday
+        self._holding_registers[RTC_WRITE_ADDRS["hour"]] = value.hour
+        self._holding_registers[RTC_WRITE_ADDRS["minute"]] = value.minute
+        self._holding_registers[RTC_WRITE_ADDRS["day"]] = value.day
+        self._holding_registers[RTC_WRITE_ADDRS["month"]] = value.month
+        self._holding_registers[RTC_WRITE_ADDRS["year"]] = encoded_year
+
+    def _mirror_rtc_shadow_write(self, address: int, value: int) -> None:
+        """In simulator mode, shadow writes commit immediately for direct readback."""
+        read_address = RTC_WRITE_TO_READ_ADDR.get(address)
+        if read_address is not None:
+            self._holding_registers[read_address] = value
 
     def _clear_alarm_coils(self) -> None:
         """Mimic the controller clearing its alarm bank after a reset pulse."""
         for definition in [ALARM_CATALOG.summary, *ALARM_CATALOG.monitored, *ALARM_CATALOG.skipped]:
             self._coils[definition.address] = False
-        # The real controller drops the reset bit automatically after the clear cycle.
         self._coils[ALARM_RESET_COIL] = False
 
     @property
@@ -126,7 +140,7 @@ class SimulatorClient:
         for addr in range(address, address + count):
             values.append(self._holding_registers.get(addr, 0))
 
-        print(f"[SIMULATOR] Read holding registers {address}-{address+count-1}: {values}")
+        print(f"[SIMULATOR] Read holding registers {address}-{address + count - 1}: {values}")
         return SimulatedResponse(registers=values)
 
     def read_input_registers(
@@ -144,7 +158,7 @@ class SimulatorClient:
         for addr in range(address, address + count):
             values.append(self._input_registers.get(addr, 0))
 
-        print(f"[SIMULATOR] Read input registers {address}-{address+count-1}: {values}")
+        print(f"[SIMULATOR] Read input registers {address}-{address + count - 1}: {values}")
         return SimulatedResponse(registers=values)
 
     def read_coils(
@@ -162,7 +176,7 @@ class SimulatorClient:
         for addr in range(address, address + count):
             values.append(bool(self._coils.get(addr, False)))
 
-        print(f"[SIMULATOR] Read coils {address}-{address+count-1}: {values}")
+        print(f"[SIMULATOR] Read coils {address}-{address + count - 1}: {values}")
         return SimulatedResponse(bits=values)
 
     def write_register(
@@ -177,6 +191,7 @@ class SimulatorClient:
             return SimulatedResponse(_is_error=True, _error_msg="Not connected")
 
         self._holding_registers[address] = value
+        self._mirror_rtc_shadow_write(address, value)
         print(f"[SIMULATOR] Write register {address} = {value}")
         return SimulatedResponse(registers=[value])
 
@@ -192,9 +207,11 @@ class SimulatorClient:
             return SimulatedResponse(_is_error=True, _error_msg="Not connected")
 
         for i, value in enumerate(values):
-            self._holding_registers[address + i] = value
+            register_address = address + i
+            self._holding_registers[register_address] = value
+            self._mirror_rtc_shadow_write(register_address, value)
 
-        print(f"[SIMULATOR] Write registers {address}-{address+len(values)-1} = {values}")
+        print(f"[SIMULATOR] Write registers {address}-{address + len(values) - 1} = {values}")
         return SimulatedResponse(registers=values)
 
     def write_coil(
@@ -235,7 +252,7 @@ class SimulatorClient:
     def get_all_registers(self) -> Dict[str, Dict[int, int]]:
         """Debug helper to see all register states."""
         return {
-            'holding': dict(self._holding_registers),
-            'input': dict(self._input_registers),
-            'coils': {addr: int(value) for addr, value in self._coils.items()},
+            "holding": dict(self._holding_registers),
+            "input": dict(self._input_registers),
+            "coils": {addr: int(value) for addr, value in self._coils.items()},
         }

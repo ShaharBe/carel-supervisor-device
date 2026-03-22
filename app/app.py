@@ -31,6 +31,47 @@ from flask import Flask, Response, jsonify, render_template, request
 # Client factory - handles real HW vs simulator toggle
 from alarms import ALARM_CATALOG
 from client_factory import create_modbus_client, is_simulator_mode
+from modbus_map import (
+    ALARM_RESET_COIL,
+    DRAIN_CYL1_COIL,
+    HUMIDIFIER_REMOTE_ONOFF_COIL,
+    HUMIDIFIER_STATUS_ADDR,
+    HUMIDIFIER_SUPERVISOR_ENABLE_COIL,
+    INFO_BLOCK1_COUNT,
+    INFO_BLOCK1_START_ADDR,
+    INFO_BLOCK2_COUNT,
+    INFO_BLOCK2_START_ADDR,
+    MAX_PRODUCTION_ADDR,
+    MAX_PRODUCTION_REG,
+    MAX_PRODUCTION_SCALE,
+    POLL_INTERVAL_S,
+    PROP_BAND_ADDR,
+    PROP_BAND_REG,
+    PROP_BAND_SCALE,
+    RTC_LATCH_COILS,
+    RTC_LATCH_PULSE_DELAY_S,
+    RTC_READ_COUNT,
+    RTC_READ_DAY_REG,
+    RTC_READ_HOUR_REG,
+    RTC_READ_MINUTE_REG,
+    RTC_READ_MONTH_REG,
+    RTC_READ_START_ADDR,
+    RTC_READ_WEEKDAY_REG,
+    RTC_READ_YEAR_REG,
+    RTC_WRITE_DAY_REG,
+    RTC_WRITE_HOUR_REG,
+    RTC_WRITE_MINUTE_REG,
+    RTC_WRITE_MONTH_REG,
+    RTC_WRITE_SHADOW_ADDRS,
+    RTC_WRITE_WEEKDAY_REG,
+    RTC_WRITE_YEAR_REG,
+    SETPOINT_ADDR,
+    SETPOINT_REG,
+    SETPOINT_SCALE,
+    TEMP_ADDR,
+    TEMP_REG,
+    TEMP_SCALE,
+)
 
 # ---------------------------
 # Configuration (easy to edit)
@@ -45,59 +86,6 @@ SLAVE_ID = 1               # Modbus slave address
 USB_VENDOR_ID = "1a86"     # QinHeng Electronics
 USB_MODEL_ID = "55d3"      # USB Single Serial
 USB_SERIAL_SHORT = "586D012821"
-
-# QModMaster-style 1-based register numbers (as you see in your tool)
-TEMP_REG = 2               # You said: "main temp (addr 1)" earlier, but later confirmed reg 2=249 -> 24.9C
-                           # Put the exact register number you read temp from in QModMaster here.
-SETPOINT_REG = 20          # qmm 20 -> A,19 temperature set point
-MAX_PRODUCTION_REG = 15    # qmm 15 -> A,14 maximum production
-PROP_BAND_REG = 21         # qmm 21 -> A,20 temperature differential
-RTC_READ_HOUR_REG = 154
-RTC_READ_MINUTE_REG = 155
-RTC_READ_DAY_REG = 156
-RTC_READ_MONTH_REG = 157
-RTC_READ_YEAR_REG = 158
-RTC_READ_WEEKDAY_REG = 159
-# D-bit coil addresses (direct Modbus 0-based addresses, NOT qmm style)
-# Verified experimentally: D1=coil addr 1, D2=coil addr 2, etc.
-RTC_COIL_HOUR = 1       # D1 -> latches hour
-RTC_COIL_MINUTE = 2     # D2 -> latches minute
-RTC_COIL_DAY = 3        # D3 -> latches day
-RTC_COIL_MONTH = 4      # D4 -> latches month
-RTC_COIL_YEAR = 5       # D5 -> latches year
-RTC_COIL_WEEKDAY = 6    # D6 -> latches weekday
-# Shadow register QMM numbers (1-based) - verified experimentally:
-# addr 159=weekday, 160=hour, 161=minute, 162=day, 163=month, 164=year
-RTC_WRITE_WEEKDAY_REG = 160   # qmm 160 -> addr 159
-RTC_WRITE_HOUR_REG = 161      # qmm 161 -> addr 160
-RTC_WRITE_MINUTE_REG = 162    # qmm 162 -> addr 161
-RTC_WRITE_DAY_REG = 163       # qmm 163 -> addr 162
-RTC_WRITE_MONTH_REG = 164     # qmm 164 -> addr 163
-RTC_WRITE_YEAR_REG = 165      # qmm 165 -> addr 164
-
-# Info registers (read-only I-registers for status monitoring)
-# Block 1: I,136..I,142 (humidifier status, conductivity, cylinder phases/status)
-INFO_BLOCK1_START_REG = 136   # qmm 136 -> addr 135
-INFO_BLOCK1_COUNT = 7         # I,136..I,142
-# Block 2: I,165..I,167 (hour counters, voltage type)
-INFO_BLOCK2_START_REG = 165   # qmm 165 -> addr 164
-INFO_BLOCK2_COUNT = 3         # I,165..I,167
-
-# Coil addresses for controls (D addresses are Modbus-aligned per user docs)
-HUMIDIFIER_STATUS_REG = 136   # I,136 -> humidifier status input register
-HUMIDIFIER_REMOTE_ONOFF_COIL = 8   # D,8 -> remote on/off from network
-HUMIDIFIER_SUPERVISOR_ENABLE_COIL = 81  # D,81 -> enable remote on/off from supervisor
-DRAIN_CYL1_COIL = 52          # D,52 -> cylinder 1 manual drain
-ALARM_RESET_COIL = 51         # D,51 -> alarm reset pulse
-# Alarm coils are loaded from app/modbus_alarms.csv and use direct Modbus 0-based coil addresses.
-
-POLL_INTERVAL_S = 1.0      # temperature polling period
-
-# Scaling
-TEMP_SCALE = 10.0          # 249 -> 24.9
-SETPOINT_SCALE = 10.0      # assume same scaling for setpoint (common on Carel)
-MAX_PRODUCTION_SCALE = 1.0 # assume percentage is direct (1000 -> 100.0%), adjust if you see different values in QModMaster
-PROP_BAND_SCALE = 10.0
 LOG_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "logs"))
 LOG_FILE = os.path.join(LOG_DIR, "app.log")
 LOG_MAX_BYTES = 512 * 1024
@@ -162,12 +150,6 @@ def build_modbus_client(port: str):
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
-def qmm_to_modbus_addr(qmm_reg_1_based: int) -> int:
-    """Convert QModMaster 1-based register number to Modbus 0-based address."""
-    if qmm_reg_1_based < 1:
-        raise ValueError("Register must be >= 1 (QModMaster style).")
-    return qmm_reg_1_based - 1
-
 @dataclass
 class Cache:
     temp_raw: Optional[int] = None
@@ -222,37 +204,6 @@ last_runtime_error: Optional[str] = None
 # Toggle between real HW and simulator with USE_SIMULATOR=1 env var
 active_com_port = COM_PORT
 client = build_modbus_client(active_com_port)
-
-TEMP_ADDR = qmm_to_modbus_addr(TEMP_REG)
-SETPOINT_ADDR = qmm_to_modbus_addr(SETPOINT_REG)
-MAX_PRODUCTION_ADDR = qmm_to_modbus_addr(MAX_PRODUCTION_REG)
-PROP_BAND_ADDR = qmm_to_modbus_addr(PROP_BAND_REG)
-HUMIDIFIER_STATUS_ADDR = qmm_to_modbus_addr(HUMIDIFIER_STATUS_REG)
-RTC_READ_START_ADDR = qmm_to_modbus_addr(RTC_READ_HOUR_REG)
-RTC_READ_COUNT = 6
-# Coil addresses are direct (not qmm converted) - already 0-indexed Modbus addresses
-RTC_COIL_START = RTC_COIL_HOUR  # = 1
-RTC_COIL_COUNT = 6
-RTC_LATCH_PULSE_DELAY_S = 0.15
-# Shadow write block: [weekday, hour, minute, day, month, year]
-RTC_WRITE_SHADOW_ADDRS = [
-    qmm_to_modbus_addr(RTC_WRITE_WEEKDAY_REG),  # addr 159
-    qmm_to_modbus_addr(RTC_WRITE_HOUR_REG),     # addr 160
-    qmm_to_modbus_addr(RTC_WRITE_MINUTE_REG),   # addr 161
-    qmm_to_modbus_addr(RTC_WRITE_DAY_REG),      # addr 162
-    qmm_to_modbus_addr(RTC_WRITE_MONTH_REG),    # addr 163
-    qmm_to_modbus_addr(RTC_WRITE_YEAR_REG),     # addr 164
-]
-# Mapping of field index to coil address for pulsing
-# Order: [weekday, hour, minute, day, month, year] -> coils [6, 1, 2, 3, 4, 5]
-RTC_FIELD_COILS = [
-    RTC_COIL_WEEKDAY,  # 6: for weekday
-    RTC_COIL_HOUR,     # 1: for hour
-    RTC_COIL_MINUTE,   # 2: for minute
-    RTC_COIL_DAY,      # 3: for day
-    RTC_COIL_MONTH,    # 4: for month
-    RTC_COIL_YEAR,     # 5: for year
-]
 
 
 def available_serial_ports() -> list[str]:
@@ -566,7 +517,7 @@ def set_rtc_edit_latches(value: bool) -> None:
   if is_simulator_mode():
     return
 
-  for coil_addr in [RTC_COIL_HOUR, RTC_COIL_MINUTE, RTC_COIL_DAY, RTC_COIL_MONTH, RTC_COIL_YEAR, RTC_COIL_WEEKDAY]:
+  for coil_addr in RTC_LATCH_COILS:
     wr = write_coil(address=coil_addr, value=value)
     if wr.isError():
       state = "set" if value else "clear"
@@ -578,7 +529,7 @@ def pulse_rtc_edit_latches() -> None:
     return
 
   # Pulse in order: hour(1), minute(2), day(3), month(4), year(5), weekday(6)
-  for coil_addr in [RTC_COIL_HOUR, RTC_COIL_MINUTE, RTC_COIL_DAY, RTC_COIL_MONTH, RTC_COIL_YEAR, RTC_COIL_WEEKDAY]:
+  for coil_addr in RTC_LATCH_COILS:
     wr = write_coil(address=coil_addr, value=True)
     if wr.isError():
       raise RuntimeError(f"Modbus write error (set coil {coil_addr}): {wr}")
@@ -681,11 +632,11 @@ def poll_registers_once() -> None:
     with modbus_lock:
       modbus_connect_or_raise()
       info1_rr = read_holding_registers(
-        address=qmm_to_modbus_addr(INFO_BLOCK1_START_REG),
+        address=INFO_BLOCK1_START_ADDR,
         count=INFO_BLOCK1_COUNT
       )
       info2_rr = read_holding_registers(
-        address=qmm_to_modbus_addr(INFO_BLOCK2_START_REG),
+        address=INFO_BLOCK2_START_ADDR,
         count=INFO_BLOCK2_COUNT
       )
 
