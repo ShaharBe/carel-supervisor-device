@@ -41,10 +41,14 @@ from modbus_map import (
     INFO_BLOCK1_START_ADDR,
     INFO_BLOCK2_COUNT,
     INFO_BLOCK2_START_ADDR,
+    MAX_PRODUCTION_MAX_PCT,
+    MAX_PRODUCTION_MIN_PCT,
     MAX_PRODUCTION_ADDR,
     MAX_PRODUCTION_REG,
     MAX_PRODUCTION_SCALE,
     POLL_INTERVAL_S,
+    PROP_BAND_MAX_C,
+    PROP_BAND_MIN_C,
     PROP_BAND_ADDR,
     PROP_BAND_REG,
     PROP_BAND_SCALE,
@@ -66,6 +70,8 @@ from modbus_map import (
     RTC_WRITE_WEEKDAY_REG,
     RTC_WRITE_YEAR_REG,
     SETPOINT_ADDR,
+    SETPOINT_MAX_C,
+    SETPOINT_MIN_C,
     SETPOINT_REG,
     SETPOINT_SCALE,
     TEMP_ADDR,
@@ -189,6 +195,21 @@ class Cache:
     alarms_last_scan_utc: Optional[str] = None
     alarms_error: Optional[str] = None
 
+
+@dataclass(frozen=True)
+class WritableField:
+    request_key: str
+    response_key: str
+    address: int
+    scale: float
+    low_limit: float
+    high_limit: float
+    cache_raw_attr: str
+    cache_scaled_attr: str
+    log_label: str
+    unit_label: str
+
+
 cache = Cache()
 cache_lock = threading.Lock()
 modbus_lock = threading.Lock()
@@ -204,6 +225,43 @@ last_runtime_error: Optional[str] = None
 # Toggle between real HW and simulator with USE_SIMULATOR=1 env var
 active_com_port = COM_PORT
 client = build_modbus_client(active_com_port)
+
+SETPOINT_FIELD = WritableField(
+    request_key="temp_c",
+    response_key="temp_c",
+    address=SETPOINT_ADDR,
+    scale=SETPOINT_SCALE,
+    low_limit=SETPOINT_MIN_C,
+    high_limit=SETPOINT_MAX_C,
+    cache_raw_attr="last_setpoint_raw",
+    cache_scaled_attr="last_setpoint_c",
+    log_label="Setpoint",
+    unit_label="C",
+)
+MAX_PRODUCTION_FIELD = WritableField(
+    request_key="value_pct",
+    response_key="value_pct",
+    address=MAX_PRODUCTION_ADDR,
+    scale=MAX_PRODUCTION_SCALE,
+    low_limit=MAX_PRODUCTION_MIN_PCT,
+    high_limit=MAX_PRODUCTION_MAX_PCT,
+    cache_raw_attr="max_production_raw",
+    cache_scaled_attr="max_production_pct",
+    log_label="Max production",
+    unit_label="%",
+)
+PROP_BAND_FIELD = WritableField(
+    request_key="value_c",
+    response_key="value_c",
+    address=PROP_BAND_ADDR,
+    scale=PROP_BAND_SCALE,
+    low_limit=PROP_BAND_MIN_C,
+    high_limit=PROP_BAND_MAX_C,
+    cache_raw_attr="prop_band_raw",
+    cache_scaled_attr="prop_band_c",
+    log_label="Prop. band",
+    unit_label="C",
+)
 
 
 def available_serial_ports() -> list[str]:
@@ -472,6 +530,68 @@ def write_register(address: int, value: int):
     return writer(address=address, value=value, device_id=SLAVE_ID)
   except TypeError:
     return writer(address=address, value=value, slave=SLAVE_ID)
+
+
+def format_limit(value: float) -> str:
+  return f"{value:g}"
+
+
+def write_writable_field(field: WritableField):
+  """Handle JSON parsing, range validation, Modbus write, and cache updates for a writable value."""
+  try:
+    body = request.get_json(force=True, silent=False)
+    if not isinstance(body, dict) or field.request_key not in body:
+      raise ValueError(f"JSON must include '{field.request_key}'")
+
+    try:
+      value = float(body[field.request_key])
+    except (TypeError, ValueError) as exc:
+      raise ValueError(f"{field.request_key} must be a number") from exc
+
+    if not (field.low_limit <= value <= field.high_limit):
+      raise ValueError(
+        f"{field.request_key} out of allowed range "
+        f"({format_limit(field.low_limit)}..{format_limit(field.high_limit)})"
+      )
+
+    raw_value = int(round(value * field.scale))
+    if not (0 <= raw_value <= 65535):
+      raise ValueError("scaled value out of 16-bit range")
+
+    with modbus_lock:
+      modbus_connect_or_raise()
+      wr = write_register(address=field.address, value=raw_value)
+    if wr.isError():
+      raise RuntimeError(f"Modbus write error: {wr}")
+
+    scaled_value = raw_value / field.scale
+    with cache_lock:
+      cache.last_write_utc = now_iso()
+      setattr(cache, field.cache_raw_attr, raw_value)
+      setattr(cache, field.cache_scaled_attr, scaled_value)
+      cache.last_error = None
+
+    logger.info(
+      "%s written successfully: %.1f %s on %s",
+      field.log_label,
+      value,
+      field.unit_label,
+      active_com_port,
+    )
+    clear_runtime_error()
+    return jsonify({"ok": True, field.response_key: scaled_value, "raw": raw_value})
+  except ValueError as e:
+    error_message = str(e)
+    with cache_lock:
+      cache.last_error = error_message
+    return jsonify({"ok": False, "error": error_message}), 400
+  except Exception as e:
+    reset_modbus_client()
+    error_message = normalize_modbus_error(e)
+    note_runtime_error(error_message)
+    with cache_lock:
+      cache.last_error = error_message
+    return jsonify({"ok": False, "error": cache.last_error}), 400
 
 
 def read_device_rtc_values() -> tuple[datetime, int, int]:
@@ -916,122 +1036,17 @@ def api_device_datetime():
 
 @app.route("/api/setpoint", methods=["POST"])
 def api_setpoint():
-    try:
-        body = request.get_json(force=True, silent=False)
-        if not isinstance(body, dict) or "temp_c" not in body:
-            raise ValueError("JSON must include 'temp_c'")
-
-        sp_c = float(body["temp_c"])
-        # Optional: clamp / validate a sane range for your system
-        if not (-20.0 <= sp_c <= 100.0):
-            raise ValueError("temp_c out of allowed range (-20..100)")
-
-        sp_raw = int(round(sp_c * SETPOINT_SCALE))
-        if not (0 <= sp_raw <= 65535):
-            raise ValueError("scaled value out of 16-bit range")
-
-        with modbus_lock:
-          modbus_connect_or_raise()
-          wr = write_register(address=SETPOINT_ADDR, value=sp_raw)
-        if wr.isError():
-          raise RuntimeError(f"Modbus write error: {wr}")
-
-        with cache_lock:
-            cache.last_write_utc = now_iso()
-            cache.last_setpoint_raw = sp_raw
-            cache.last_setpoint_c = sp_raw / SETPOINT_SCALE
-            cache.last_error = None
-        logger.info("Setpoint written successfully: %.1f C on %s", sp_c, active_com_port)
-        clear_runtime_error()
-
-        return jsonify({"ok": True, "temp_c": cache.last_setpoint_c, "raw": cache.last_setpoint_raw})
-    except Exception as e:
-        reset_modbus_client()
-        error_message = normalize_modbus_error(e)
-        note_runtime_error(error_message)
-        with cache_lock:
-          cache.last_error = error_message
-        return jsonify({"ok": False, "error": cache.last_error}), 400
+    return write_writable_field(SETPOINT_FIELD)
 
 
 @app.route("/api/max-production", methods=["POST"])
 def api_max_production():
-    try:
-        body = request.get_json(force=True, silent=False)
-        if not isinstance(body, dict) or "value_pct" not in body:
-            raise ValueError("JSON must include 'value_pct'")
-
-        value_pct = float(body["value_pct"])
-        max_production_raw = int(round(value_pct * MAX_PRODUCTION_SCALE))
-        if not (0 <= max_production_raw <= 65535):
-            raise ValueError("scaled value out of 16-bit range")
-
-        with modbus_lock:
-          modbus_connect_or_raise()
-          wr = write_register(address=MAX_PRODUCTION_ADDR, value=max_production_raw)
-        if wr.isError():
-          raise RuntimeError(f"Modbus write error: {wr}")
-
-        with cache_lock:
-            cache.last_write_utc = now_iso()
-            cache.max_production_raw = max_production_raw
-            cache.max_production_pct = max_production_raw / MAX_PRODUCTION_SCALE
-            cache.last_error = None
-        logger.info("Max production written successfully: %.1f %% on %s", value_pct, active_com_port)
-        clear_runtime_error()
-
-        return jsonify({
-            "ok": True,
-            "value_pct": cache.max_production_pct,
-            "raw": cache.max_production_raw,
-        })
-    except Exception as e:
-        reset_modbus_client()
-        error_message = normalize_modbus_error(e)
-        note_runtime_error(error_message)
-        with cache_lock:
-          cache.last_error = error_message
-        return jsonify({"ok": False, "error": cache.last_error}), 400
+    return write_writable_field(MAX_PRODUCTION_FIELD)
 
 
 @app.route("/api/prop-band", methods=["POST"])
 def api_prop_band():
-    try:
-        body = request.get_json(force=True, silent=False)
-        if not isinstance(body, dict) or "value_c" not in body:
-            raise ValueError("JSON must include 'value_c'")
-
-        value_c = float(body["value_c"])
-        prop_band_raw = int(round(value_c * PROP_BAND_SCALE))
-        if not (0 <= prop_band_raw <= 65535):
-            raise ValueError("scaled value out of 16-bit range")
-
-        with modbus_lock:
-          modbus_connect_or_raise()
-          wr = write_register(address=PROP_BAND_ADDR, value=prop_band_raw)
-        if wr.isError():
-          raise RuntimeError(f"Modbus write error: {wr}")
-
-        with cache_lock:
-            cache.last_write_utc = now_iso()
-            cache.prop_band_raw = prop_band_raw
-            cache.prop_band_c = prop_band_raw / PROP_BAND_SCALE
-            cache.last_error = None
-        logger.info("Prop. band written successfully: %.1f C on %s", value_c, active_com_port)
-        clear_runtime_error()
-
-        return jsonify({
-            "ok": True,
-            "value_c": cache.prop_band_c,
-            "raw": cache.prop_band_raw,
-        })
-    except Exception as e:
-        reset_modbus_client()
-        error_message = normalize_modbus_error(e)
-        note_runtime_error(error_message)
-        with cache_lock:
-          cache.last_error = error_message
-        return jsonify({"ok": False, "error": cache.last_error}), 400
+    return write_writable_field(PROP_BAND_FIELD)
 
 
 @app.route("/api/humidifier-toggle", methods=["POST"])
