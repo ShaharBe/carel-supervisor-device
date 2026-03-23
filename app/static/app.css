@@ -288,6 +288,9 @@
       text-align: left;
       cursor: pointer;
     }
+    .menu-line-leaf {
+      grid-template-columns: minmax(0, 1fr) minmax(10ch, 48%);
+    }
     .menu-line:hover { background: rgba(47, 72, 48, 0.1); }
     .menu-line.is-active {
       background: #2f4830;
@@ -307,6 +310,19 @@
     .menu-line-hint {
       opacity: 0.78;
       font-size: 0.86em;
+    }
+    .menu-line-value {
+      display: block;
+      width: calc(100% / var(--menu-text-scale-x));
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: right;
+      letter-spacing: var(--menu-letter-spacing);
+      transform: scaleX(var(--menu-text-scale-x));
+      transform-origin: right center;
+      justify-self: end;
     }
     .menu-line-empty {
       display: flex;

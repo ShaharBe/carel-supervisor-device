@@ -23,6 +23,8 @@
   let menuCurrentPath = '';
   let menuSelectedIndex = 0;
   const menuValueStore = new Map();
+  const menuValueStateStore = new Map();
+  let menuValueRequestSequence = 0;
   let menuEditState = {
     open: false,
     nodePath: null,
@@ -152,6 +154,7 @@
     menuCurrentPath = '';
     menuSelectedIndex = 0;
     renderMenuWidget();
+    refreshVisibleMenuLeafValues(true);
   }
 
   function getMenuNode(path) {
@@ -206,7 +209,10 @@
     if (node.kind === 'stub') {
       return 'TBD';
     }
-    return node.register ? node.register.access : 'R';
+    if (node.kind === 'leaf') {
+      return formatMenuLineValue(node);
+    }
+    return '';
   }
 
   function buildMenuBreadcrumb(node) {
@@ -363,6 +369,15 @@
     return 0;
   }
 
+  function getMenuValueState(path) {
+    return menuValueStateStore.get(path) || { loading: false, error: null };
+  }
+
+  function setMenuValueState(path, patch) {
+    const current = getMenuValueState(path);
+    menuValueStateStore.set(path, { ...current, ...patch });
+  }
+
   function getCurrentMenuValue(node, editor) {
     if (menuValueStore.has(node.path)) {
       return menuValueStore.get(node.path);
@@ -418,7 +433,80 @@
       }
     }
 
+    if (editor.type === 'integer') {
+      const numericValue = Number(value);
+      if (Number.isFinite(numericValue)) {
+        return String(Math.round(numericValue));
+      }
+    }
+
+    if (editor.type === 'float') {
+      const numericValue = Number(value);
+      if (Number.isFinite(numericValue)) {
+        return numericValue.toFixed(1);
+      }
+    }
+
     return String(value);
+  }
+
+  function formatMenuLineValue(node) {
+    const editor = getLeafEditor(node);
+    if (!editor) {
+      return '';
+    }
+
+    const valueState = getMenuValueState(node.path);
+    if (menuValueStore.has(node.path)) {
+      return formatMenuValue(node, menuValueStore.get(node.path), editor);
+    }
+
+    if (valueState.loading) {
+      return '...';
+    }
+
+    if (valueState.error) {
+      return 'ERR';
+    }
+
+    if (menuNodeSupportsRemoteRead(node)) {
+      return '...';
+    }
+
+    return '--';
+  }
+
+  function refreshVisibleMenuLeafValues(forceRefresh = true) {
+    const activeMenuPath = menuCurrentPath;
+    const requestSequence = ++menuValueRequestSequence;
+    const visibleLeaves = getCurrentMenuChildren().filter(
+      (child) => child.kind === 'leaf' && menuNodeSupportsRemoteRead(child)
+    );
+    const targetLeaves = forceRefresh
+      ? visibleLeaves
+      : visibleLeaves.filter((child) => !menuValueStore.has(child.path));
+
+    if (targetLeaves.length === 0) {
+      return;
+    }
+
+    targetLeaves.forEach((node) => {
+      setMenuValueState(node.path, { loading: true, error: null });
+    });
+    renderMenuWidget();
+
+    targetLeaves.forEach(async (node) => {
+      try {
+        await fetchMenuNodeValue(node, { refresh: true });
+        setMenuValueState(node.path, { loading: false, error: null });
+      } catch (error) {
+        setMenuValueState(node.path, { loading: false, error: error.message });
+      }
+
+      if (menuCurrentPath === activeMenuPath && requestSequence === menuValueRequestSequence) {
+        renderMenuWidget();
+      }
+    });
   }
 
   function menuDetailMeta(node) {
@@ -492,12 +580,19 @@
     }
     detail.appendChild(guidance);
 
-    if (isMenuNodeEditable(node)) {
+    if (node.kind === 'leaf') {
       const currentValue = document.createElement('div');
       currentValue.className = 'menu-detail-note';
-      currentValue.textContent =
-        'Current UI value: ' + formatMenuValue(node, getCurrentMenuValue(node, getLeafEditor(node)));
+      currentValue.textContent = 'Current value: ' + formatMenuLineValue(node);
       detail.appendChild(currentValue);
+
+      const valueState = getMenuValueState(node.path);
+      if (valueState.error) {
+        const errorText = document.createElement('div');
+        errorText.className = 'menu-detail-note err';
+        errorText.textContent = 'Read error: ' + valueState.error;
+        detail.appendChild(errorText);
+      }
     }
 
     if (node.note) {
@@ -633,7 +728,7 @@
       const hintText = menuLineHint(child);
       if (hintText) {
         const hint = document.createElement('span');
-        hint.className = 'menu-line-hint';
+        hint.className = child.kind === 'leaf' ? 'menu-line-value' : 'menu-line-hint';
         hint.textContent = hintText;
         line.appendChild(hint);
       }
@@ -662,6 +757,7 @@
     menuCurrentPath = menuNode.path;
     menuSelectedIndex = findSelectableChildIndex(menuNode, preferredChildPath);
     renderMenuWidget();
+    refreshVisibleMenuLeafValues(true);
     document.getElementById('menuScreen').focus();
   }
 
