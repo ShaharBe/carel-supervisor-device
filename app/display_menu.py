@@ -133,6 +133,7 @@ def _build_node(path: str, raw_text: str) -> dict[str, Any]:
         "raw_text": raw_text,
         "kind": "leaf",
         "children": [],
+        "visible": True,
         "register": _extract_register(raw_text),
         "range_or_options": _extract_bracket_hint(raw_text),
         "note": note,

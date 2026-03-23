@@ -22,7 +22,6 @@
   let menuIndex = new Map();
   let menuCurrentPath = '';
   let menuSelectedIndex = 0;
-  const menuViewportSize = 6;
 
   function browserDateTimeLocalValue() {
     const now = new Date();
@@ -66,8 +65,16 @@
     return menuIndex.get(path) || menuPayload.root;
   }
 
+  function isMenuNodeVisible(node) {
+    return node?.visible !== false;
+  }
+
+  function getVisibleMenuChildren(node) {
+    return (node.children || []).filter((child) => isMenuNodeVisible(child));
+  }
+
   function getCurrentMenuChildren() {
-    return getMenuNode(menuCurrentPath).children || [];
+    return getVisibleMenuChildren(getMenuNode(menuCurrentPath));
   }
 
   function clampMenuSelection() {
@@ -101,20 +108,12 @@
       return node.page_direction === 'prev' ? '\u2190' : '\u2192';
     }
     if (node.kind === 'caption') {
-      return 'CAP';
+      return '';
     }
     if (node.kind === 'stub') {
       return 'TBD';
     }
     return node.register ? node.register.access : 'R';
-  }
-
-  function menuLocalIndex(node) {
-    if (!node || !node.path) {
-      return '';
-    }
-    const parts = node.path.split('.');
-    return parts[parts.length - 1];
   }
 
   function buildMenuBreadcrumb(node) {
@@ -130,7 +129,7 @@
   function menuDetailMeta(node) {
     const fragments = [];
     if (node.kind === 'menu') {
-      const count = (node.children || []).length;
+      const count = getVisibleMenuChildren(node).length;
       const itemLabel = count === 1 ? 'item' : 'items';
       fragments.push('Submenu with ' + count + ' ' + itemLabel);
     } else if (node.kind === 'caption') {
@@ -214,6 +213,42 @@
     document.getElementById('menuHomeBtn').disabled = menuCurrentPath === '';
   }
 
+  function findSelectableChildIndex(menuNode, preferredChildPath) {
+    const visibleChildren = getVisibleMenuChildren(menuNode);
+    if (visibleChildren.length === 0) {
+      return 0;
+    }
+
+    if (!preferredChildPath) {
+      return 0;
+    }
+
+    const directIndex = visibleChildren.findIndex((child) => child.path === preferredChildPath);
+    if (directIndex !== -1) {
+      return directIndex;
+    }
+
+    const allChildren = menuNode.children || [];
+    const targetIndex = allChildren.findIndex((child) => child.path === preferredChildPath);
+    if (targetIndex === -1) {
+      return 0;
+    }
+
+    for (let index = targetIndex - 1; index >= 0; index -= 1) {
+      if (isMenuNodeVisible(allChildren[index])) {
+        return visibleChildren.findIndex((child) => child.path === allChildren[index].path);
+      }
+    }
+
+    for (let index = targetIndex + 1; index < allChildren.length; index += 1) {
+      if (isMenuNodeVisible(allChildren[index])) {
+        return visibleChildren.findIndex((child) => child.path === allChildren[index].path);
+      }
+    }
+
+    return 0;
+  }
+
   function renderMenuWidget() {
     const screen = document.getElementById('menuScreen');
     const path = document.getElementById('menuWidgetPath');
@@ -224,6 +259,7 @@
       state.textContent = 'Read error';
       state.className = 'menu-widget-state err';
       screen.replaceChildren();
+      screen.style.gridTemplateRows = '1fr';
 
       const empty = document.createElement('div');
       empty.className = 'menu-line-empty';
@@ -236,7 +272,7 @@
     }
 
     const currentMenu = getMenuNode(menuCurrentPath);
-    const children = currentMenu.children || [];
+    const children = getVisibleMenuChildren(currentMenu);
     clampMenuSelection();
 
     path.textContent = buildMenuBreadcrumb(currentMenu);
@@ -246,6 +282,7 @@
     screen.replaceChildren();
 
     if (children.length === 0) {
+      screen.style.gridTemplateRows = '1fr';
       const empty = document.createElement('div');
       empty.className = 'menu-line-empty';
       empty.textContent = 'This menu is empty.';
@@ -255,14 +292,9 @@
       return;
     }
 
-    let start = 0;
-    if (children.length > menuViewportSize) {
-      start = Math.max(0, menuSelectedIndex - Math.floor(menuViewportSize / 2));
-      start = Math.min(start, children.length - menuViewportSize);
-    }
+    screen.style.gridTemplateRows = 'repeat(' + children.length + ', minmax(0, 1fr))';
 
-    children.slice(start, start + menuViewportSize).forEach((child, visibleIndex) => {
-      const actualIndex = start + visibleIndex;
+    children.forEach((child, actualIndex) => {
       const line = document.createElement('button');
       line.type = 'button';
       line.className = 'menu-line menu-line-' + child.kind + (actualIndex === menuSelectedIndex ? ' is-active' : '');
@@ -279,19 +311,20 @@
         openSelectedMenuItem();
       });
 
-      const index = document.createElement('span');
-      index.className = 'menu-line-index';
-      index.textContent = menuLocalIndex(child);
-
       const label = document.createElement('span');
       label.className = 'menu-line-label';
       label.textContent = child.display_label || child.title || child.path;
 
-      const hint = document.createElement('span');
-      hint.className = 'menu-line-hint';
-      hint.textContent = menuLineHint(child);
+      line.appendChild(label);
 
-      line.append(index, label, hint);
+      const hintText = menuLineHint(child);
+      if (hintText) {
+        const hint = document.createElement('span');
+        hint.className = 'menu-line-hint';
+        hint.textContent = hintText;
+        line.appendChild(hint);
+      }
+
       screen.appendChild(line);
     });
 
@@ -311,9 +344,10 @@
     document.getElementById('menuScreen').focus();
   }
 
-  function navigateToMenu(path) {
-    menuCurrentPath = path;
-    menuSelectedIndex = 0;
+  function navigateToMenu(path, preferredChildPath = null) {
+    const menuNode = getMenuNode(path);
+    menuCurrentPath = menuNode.path;
+    menuSelectedIndex = findSelectableChildIndex(menuNode, preferredChildPath);
     renderMenuWidget();
     document.getElementById('menuScreen').focus();
   }
@@ -365,7 +399,7 @@
     }
 
     const currentMenu = getMenuNode(menuCurrentPath);
-    navigateToMenu(currentMenu.parent_path || '');
+    navigateToMenu(currentMenu.parent_path || '', currentMenu.path);
   }
 
   function goHomeInMenu() {

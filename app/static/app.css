@@ -190,17 +190,20 @@
         0 10px 18px rgba(27, 34, 24, 0.22);
     }
     .menu-screen {
-      min-height: 244px;
-      padding: 10px;
+      height: 320px;
+      padding: 12px 10px;
       border-radius: 10px;
       border: 2px solid #93a47f;
       background:
         linear-gradient(180deg, #dce7cf 0%, #c3d3b0 100%);
       display: grid;
-      gap: 6px;
+      gap: 3px;
       font-family: Consolas, "Courier New", monospace;
+      font-size: 1.45rem;
+      line-height: 1.05;
       color: #22301b;
       outline: none;
+      overflow: hidden;
       box-shadow:
         inset 0 0 0 1px rgba(255, 255, 255, 0.4),
         inset 0 6px 18px rgba(255, 255, 255, 0.16);
@@ -217,10 +220,11 @@
       background: transparent;
       color: inherit;
       display: grid;
-      grid-template-columns: auto 1fr auto;
-      gap: 8px;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
       align-items: center;
-      padding: 6px 8px;
+      min-height: 0;
+      padding: 0 8px;
       font: inherit;
       text-align: left;
       cursor: pointer;
@@ -230,11 +234,6 @@
       background: #2f4830;
       color: #eef6e7;
       box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
-    }
-    .menu-line-index {
-      min-width: 2.4ch;
-      opacity: 0.78;
-      font-variant-numeric: tabular-nums;
     }
     .menu-line-label {
       overflow: hidden;
@@ -249,9 +248,17 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      min-height: 34px;
       padding: 6px 8px;
       text-align: center;
+    }
+    .menu-line-caption {
+      grid-template-columns: minmax(0, 1fr);
+      padding-left: 4px;
+      padding-right: 4px;
+    }
+    .menu-line-caption .menu-line-label {
+      text-align: center;
+      font-weight: 700;
     }
     .menu-line-stub:not(.is-active),
     .menu-line-caption:not(.is-active) {
@@ -339,7 +346,10 @@
       .top-strip { gap: 8px 14px; }
       .top-item { min-height: auto; }
       .compact-action-row label { width: auto; margin-bottom: 0; }
-      .menu-screen { min-height: 224px; }
+      .menu-screen {
+        height: 304px;
+        font-size: 1.3rem;
+      }
       .menu-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .menu-nav .small-btn { width: 100%; }
       .setpoint-input {
