@@ -25,45 +25,9 @@
       </div>
     </div>
 
-    <div class="row compact-action-row">
-      <label>Setpoint (&deg;C):</label>
-      <span class="setpoint-current">        
-        <span id="lsp">&mdash;</span>
-      </span>
-      <button id="editSetpointBtn" class="small-btn" type="button" disabled>Edit</button>
-    </div>
-
-    <div class="row compact-action-row">
-      <label>Humidifier:</label>
-      <span class="setpoint-current">
-        <span class="top-label">Status:</span>
-        <span id="humidifierStatus">&mdash;</span>
-      </span>
-      <button id="humidifierToggleBtn" class="small-btn" type="button" disabled>&mdash;</button>
-    </div>
-
-    <div class="row compact-action-row">
-      <label>Max Production:</label>
-      <span class="setpoint-current">
-        <span id="maxProductionValue">&mdash;</span>
-      </span>
-      <button id="editMaxProductionBtn" class="small-btn" type="button" disabled>Edit</button>
-    </div>
-
-    <div class="row compact-action-row">
-      <label>Prop. band:</label>
-      <span class="setpoint-current">
-        <span id="propBandValue">&mdash;</span>
-      </span>
-      <button id="editPropBandBtn" class="small-btn" type="button" disabled>Edit</button>
-    </div>
-
     <section id="menuWidgetRoot" class="menu-widget" aria-labelledby="menuWidgetTitle">
       <div class="menu-widget-head">
-        <div>
-          <h3 id="menuWidgetTitle" class="menu-widget-title">Controller Menu</h3>
-          <div id="menuWidgetPath" class="menu-widget-path muted">Loading menu path...</div>
-        </div>
+        <h3 id="menuWidgetTitle" class="menu-widget-title">Controller Menu</h3>
         <span id="menuWidgetState" class="menu-widget-state muted">Loading...</span>
       </div>
 
@@ -81,14 +45,13 @@
         <button id="resetMenuDisplayBtn" class="small-btn menu-display-reset" type="button">Reset</button>
       </div>
 
+      <div id="menuWidgetPath" class="menu-widget-path muted">Loading menu path...</div>
+
       <div class="lcd-shell">
         <div id="menuScreen" class="menu-screen" tabindex="0" role="listbox" aria-label="Controller menu items"></div>
       </div>
 
       <div class="menu-nav">
-        <button id="menuUpBtn" class="small-btn" type="button">Up</button>
-        <button id="menuEnterBtn" class="small-btn" type="button">Enter</button>
-        <button id="menuDownBtn" class="small-btn" type="button">Down</button>
         <button id="menuBackBtn" class="small-btn" type="button">Back</button>
         <button id="menuHomeBtn" class="small-btn" type="button">Home</button>
       </div>
@@ -169,63 +132,6 @@
       </div>
 
       <div id="rtcModalStatus" class="modal-status muted"></div>
-    </div>
-  </div>
-
-  <div id="setpointModalBackdrop" class="modal-backdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="setpointModalTitle">
-      <h3 id="setpointModalTitle">Edit Setpoint</h3>
-      <div class="muted">Enter the new temperature setpoint.</div>
-
-      <div class="field">
-        <label for="setpointInput">Setpoint (&deg;C)</label>
-        <input id="setpointInput" class="setpoint-input" type="number" step="0.1" inputmode="decimal" />
-      </div>
-
-      <div class="modal-actions">
-        <button id="saveSetpointBtn" type="button">Save</button>
-        <button id="cancelSetpointBtn" type="button">Cancel</button>
-      </div>
-
-      <div id="setpointModalStatus" class="modal-status muted"></div>
-    </div>
-  </div>
-
-  <div id="maxProductionModalBackdrop" class="modal-backdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="maxProductionModalTitle">
-      <h3 id="maxProductionModalTitle">Edit Max Production</h3>
-      <div class="muted">Enter the maximum production value.</div>
-
-      <div class="field">
-        <label for="maxProductionInput">Max Production (%)</label>
-        <input id="maxProductionInput" class="setpoint-input" type="number" step="0.1" inputmode="decimal" />
-      </div>
-
-      <div class="modal-actions">
-        <button id="saveMaxProductionBtn" type="button">Save</button>
-        <button id="cancelMaxProductionBtn" type="button">Cancel</button>
-      </div>
-
-      <div id="maxProductionModalStatus" class="modal-status muted"></div>
-    </div>
-  </div>
-
-  <div id="propBandModalBackdrop" class="modal-backdrop" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="propBandModalTitle">
-      <h3 id="propBandModalTitle">Edit Prop. Band</h3>
-      <div class="muted">Enter the temperature differential value.</div>
-
-      <div class="field">
-        <label for="propBandInput">Prop. band (&deg;C)</label>
-        <input id="propBandInput" class="setpoint-input" type="number" step="0.1" inputmode="decimal" />
-      </div>
-
-      <div class="modal-actions">
-        <button id="savePropBandBtn" type="button">Save</button>
-        <button id="cancelPropBandBtn" type="button">Cancel</button>
-      </div>
-
-      <div id="propBandModalStatus" class="modal-status muted"></div>
     </div>
   </div>
 

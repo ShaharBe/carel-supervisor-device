@@ -193,14 +193,17 @@
     }
     .menu-widget-head {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: space-between;
       gap: 10px;
       flex-wrap: wrap;
-      margin-bottom: 10px;
+      margin-bottom: 8px;
     }
     .menu-widget-title { margin: 0; font-size: 1.02rem; }
-    .menu-widget-path { margin-top: 4px; line-height: 1.35; }
+    .menu-widget-path {
+      margin: 0 0 8px;
+      line-height: 1.35;
+    }
     .menu-widget-state {
       display: inline-flex;
       align-items: center;
@@ -333,10 +336,14 @@
     }
     .menu-line-caption {
       grid-template-columns: minmax(0, 1fr);
+      justify-items: center;
       padding-left: 4px;
       padding-right: 4px;
     }
     .menu-line-caption .menu-line-label {
+      width: auto;
+      max-width: calc(100% / var(--menu-text-scale-x));
+      margin: 0 auto;
       text-align: center;
       font-weight: 700;
       transform-origin: center center;

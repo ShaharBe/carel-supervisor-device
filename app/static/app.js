@@ -1,11 +1,5 @@
   let rtcModalOpen = false;
-  let setpointModalOpen = false;
-  let maxProductionModalOpen = false;
-  let propBandModalOpen = false;
   let lastRtcIsoLocal = null;
-  let lastSetpointC = null;
-  let lastMaxProductionPct = null;
-  let lastPropBandC = null;
   const humidifierStatusMap = {
     0: 'On duty',
     1: 'Alarm(s) present',
@@ -610,9 +604,6 @@
 
   function syncMenuControls(children) {
     const hasSelection = children.length > 0;
-    document.getElementById('menuUpBtn').disabled = !hasSelection;
-    document.getElementById('menuDownBtn').disabled = !hasSelection;
-    document.getElementById('menuEnterBtn').disabled = !hasSelection;
     document.getElementById('menuBackBtn').disabled = menuCurrentPath === '';
     document.getElementById('menuHomeBtn').disabled = menuCurrentPath === '';
   }
@@ -1117,72 +1108,6 @@
     document.getElementById('rtcModalBackdrop').setAttribute('aria-hidden', 'true');
   }
 
-  function openSetpointModal() {
-    if (lastSetpointC === null || lastSetpointC === undefined) {
-      return;
-    }
-
-    setpointModalOpen = true;
-    document.getElementById('setpointModalBackdrop').classList.add('open');
-    document.getElementById('setpointModalBackdrop').setAttribute('aria-hidden', 'false');
-    document.getElementById('setpointModalStatus').textContent = '';
-    document.getElementById('setpointModalStatus').className = 'modal-status muted';
-    const input = document.getElementById('setpointInput');
-    input.value = lastSetpointC.toFixed(1);
-    input.focus();
-    input.select();
-  }
-
-  function closeSetpointModal() {
-    setpointModalOpen = false;
-    document.getElementById('setpointModalBackdrop').classList.remove('open');
-    document.getElementById('setpointModalBackdrop').setAttribute('aria-hidden', 'true');
-  }
-
-  function openMaxProductionModal() {
-    if (lastMaxProductionPct === null || lastMaxProductionPct === undefined) {
-      return;
-    }
-
-    maxProductionModalOpen = true;
-    document.getElementById('maxProductionModalBackdrop').classList.add('open');
-    document.getElementById('maxProductionModalBackdrop').setAttribute('aria-hidden', 'false');
-    document.getElementById('maxProductionModalStatus').textContent = '';
-    document.getElementById('maxProductionModalStatus').className = 'modal-status muted';
-    const input = document.getElementById('maxProductionInput');
-    input.value = lastMaxProductionPct.toFixed(1);
-    input.focus();
-    input.select();
-  }
-
-  function closeMaxProductionModal() {
-    maxProductionModalOpen = false;
-    document.getElementById('maxProductionModalBackdrop').classList.remove('open');
-    document.getElementById('maxProductionModalBackdrop').setAttribute('aria-hidden', 'true');
-  }
-
-  function openPropBandModal() {
-    if (lastPropBandC === null || lastPropBandC === undefined) {
-      return;
-    }
-
-    propBandModalOpen = true;
-    document.getElementById('propBandModalBackdrop').classList.add('open');
-    document.getElementById('propBandModalBackdrop').setAttribute('aria-hidden', 'false');
-    document.getElementById('propBandModalStatus').textContent = '';
-    document.getElementById('propBandModalStatus').className = 'modal-status muted';
-    const input = document.getElementById('propBandInput');
-    input.value = lastPropBandC.toFixed(1);
-    input.focus();
-    input.select();
-  }
-
-  function closePropBandModal() {
-    propBandModalOpen = false;
-    document.getElementById('propBandModalBackdrop').classList.remove('open');
-    document.getElementById('propBandModalBackdrop').setAttribute('aria-hidden', 'true');
-  }
-
   function setAlarmBadge(mode, text) {
     const badge = document.getElementById('alarmsBadge');
     badge.textContent = text;
@@ -1297,50 +1222,6 @@
         document.getElementById('deviceTime').textContent = '\u2014';
       }
 
-      const hasSetpoint = j.last_setpoint_c !== null && j.last_setpoint_c !== undefined;
-      lastSetpointC = hasSetpoint ? j.last_setpoint_c : null;
-      document.getElementById('editSetpointBtn').disabled = !hasSetpoint;
-      if (hasSetpoint) {
-        document.getElementById('lsp').textContent = j.last_setpoint_c.toFixed(1) + ' \u00B0C';
-      } else {
-        document.getElementById('lsp').textContent = '\u2014';
-      }
-
-      const hasMaxProduction = j.max_production_pct !== null && j.max_production_pct !== undefined;
-      lastMaxProductionPct = hasMaxProduction ? j.max_production_pct : null;
-      document.getElementById('editMaxProductionBtn').disabled = !hasMaxProduction;
-      if (hasMaxProduction) {
-        document.getElementById('maxProductionValue').textContent = j.max_production_pct.toFixed(1) + ' %';
-      } else {
-        document.getElementById('maxProductionValue').textContent = '\u2014';
-      }
-
-      const hasPropBand = j.prop_band_c !== null && j.prop_band_c !== undefined;
-      lastPropBandC = hasPropBand ? j.prop_band_c : null;
-      document.getElementById('editPropBandBtn').disabled = !hasPropBand;
-      if (hasPropBand) {
-        document.getElementById('propBandValue').textContent = j.prop_band_c.toFixed(1) + ' \u00B0C';
-      } else {
-        document.getElementById('propBandValue').textContent = '\u2014';
-      }
-
-      const humidifierStatus = j.info?.humidifier_status;
-      document.getElementById('humidifierStatus').textContent =
-        humidifierStatusMap[humidifierStatus] ?? humidifierStatus ?? '\u2014';
-      const humidifierToggleBtn = document.getElementById('humidifierToggleBtn');
-      const humidifierNetworkEnabled = j.info?.humidifier_network_enabled;
-      if (humidifierNetworkEnabled === true) {
-        humidifierToggleBtn.textContent = 'Off';
-        humidifierToggleBtn.disabled = false;
-      } else if (humidifierNetworkEnabled === false) {
-        humidifierToggleBtn.textContent = 'On';
-        humidifierToggleBtn.disabled = false;
-      } else {
-        humidifierToggleBtn.textContent = '\u2014';
-        humidifierToggleBtn.disabled = true;
-      }
-
-      // Info accordion
       if (j.info) {
         const phaseMap = {0:'Not active', 1:'Softstart', 2:'Start', 3:'Steady state', 4:'Reduced', 5:'Delayed stop', 6:'Full flush', 7:'Fast Start', 8:'Fast Start (foam)', 9:'Fast Start (heating)'};
         const statusMap = {0:'No production', 1:'Start evap', 2:'Water fill', 3:'Producing', 4:'Drain (deciding)', 5:'Drain (pump)', 6:'Drain (closing)', 7:'Blocked', 8:'Inactivity drain', 9:'Flushing', 10:'Manual drain', 11:'No supply water', 12:'Periodic drain'};
@@ -1378,13 +1259,6 @@
       document.getElementById('status').title = String(e);
       document.getElementById('temp').textContent = '\u2014';
       document.getElementById('deviceTime').textContent = '\u2014';
-      document.getElementById('maxProductionValue').textContent = '\u2014';
-      document.getElementById('propBandValue').textContent = '\u2014';
-      document.getElementById('editMaxProductionBtn').disabled = true;
-      document.getElementById('editPropBandBtn').disabled = true;
-      document.getElementById('humidifierStatus').textContent = '\u2014';
-      document.getElementById('humidifierToggleBtn').textContent = '\u2014';
-      document.getElementById('humidifierToggleBtn').disabled = true;
       setModbusIndicator('status-dot-dead');
       setAlarmBadge('alarm-pill-neutral', 'UI error');
       document.getElementById('alarmsEmpty').textContent = 'Unable to render alarms.';
@@ -1423,150 +1297,6 @@
     await refresh();
   }
 
-  async function saveSetpoint() {
-    const input = document.getElementById('setpointInput');
-    const modalStatus = document.getElementById('setpointModalStatus');
-    const saveBtn = document.getElementById('saveSetpointBtn');
-    const cancelBtn = document.getElementById('cancelSetpointBtn');
-    const v = Number(input.value);
-    if (!Number.isFinite(v)) {
-      modalStatus.textContent = 'Enter a valid setpoint (\u00B0C).';
-      modalStatus.className = 'modal-status err';
-      return;
-    }
-
-    modalStatus.textContent = 'Saving...';
-    modalStatus.className = 'modal-status muted';
-    input.disabled = true;
-    saveBtn.disabled = true;
-    cancelBtn.disabled = true;
-
-    try {
-      const r = await fetch('api/setpoint', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ temp_c: v })
-      });
-      const j = await r.json();
-      if (!j.ok) {
-        modalStatus.textContent = 'Write failed: ' + (j.error || 'unknown');
-        modalStatus.className = 'modal-status err';
-        input.focus();
-        input.select();
-        return;
-      }
-    } catch (e) {
-      modalStatus.textContent = 'Write failed: ' + e;
-      modalStatus.className = 'modal-status err';
-      input.focus();
-      input.select();
-      return;
-    } finally {
-      input.disabled = false;
-      saveBtn.disabled = false;
-      cancelBtn.disabled = false;
-    }
-
-    closeSetpointModal();
-    await refresh();
-  }
-
-  async function saveMaxProduction() {
-    const input = document.getElementById('maxProductionInput');
-    const modalStatus = document.getElementById('maxProductionModalStatus');
-    const saveBtn = document.getElementById('saveMaxProductionBtn');
-    const cancelBtn = document.getElementById('cancelMaxProductionBtn');
-    const v = Number(input.value);
-    if (!Number.isFinite(v)) {
-      modalStatus.textContent = 'Enter a valid maximum production (%).';
-      modalStatus.className = 'modal-status err';
-      return;
-    }
-
-    modalStatus.textContent = 'Saving...';
-    modalStatus.className = 'modal-status muted';
-    input.disabled = true;
-    saveBtn.disabled = true;
-    cancelBtn.disabled = true;
-
-    try {
-      const r = await fetch('api/max-production', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value_pct: v })
-      });
-      const j = await r.json();
-      if (!j.ok) {
-        modalStatus.textContent = 'Write failed: ' + (j.error || 'unknown');
-        modalStatus.className = 'modal-status err';
-        input.focus();
-        input.select();
-        return;
-      }
-    } catch (e) {
-      modalStatus.textContent = 'Write failed: ' + e;
-      modalStatus.className = 'modal-status err';
-      input.focus();
-      input.select();
-      return;
-    } finally {
-      input.disabled = false;
-      saveBtn.disabled = false;
-      cancelBtn.disabled = false;
-    }
-
-    closeMaxProductionModal();
-    await refresh();
-  }
-
-  async function savePropBand() {
-    const input = document.getElementById('propBandInput');
-    const modalStatus = document.getElementById('propBandModalStatus');
-    const saveBtn = document.getElementById('savePropBandBtn');
-    const cancelBtn = document.getElementById('cancelPropBandBtn');
-    const v = Number(input.value);
-    if (!Number.isFinite(v)) {
-      modalStatus.textContent = 'Enter a valid prop. band (\u00B0C).';
-      modalStatus.className = 'modal-status err';
-      return;
-    }
-
-    modalStatus.textContent = 'Saving...';
-    modalStatus.className = 'modal-status muted';
-    input.disabled = true;
-    saveBtn.disabled = true;
-    cancelBtn.disabled = true;
-
-    try {
-      const r = await fetch('api/prop-band', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value_c: v })
-      });
-      const j = await r.json();
-      if (!j.ok) {
-        modalStatus.textContent = 'Write failed: ' + (j.error || 'unknown');
-        modalStatus.className = 'modal-status err';
-        input.focus();
-        input.select();
-        return;
-      }
-    } catch (e) {
-      modalStatus.textContent = 'Write failed: ' + e;
-      modalStatus.className = 'modal-status err';
-      input.focus();
-      input.select();
-      return;
-    } finally {
-      input.disabled = false;
-      saveBtn.disabled = false;
-      cancelBtn.disabled = false;
-    }
-
-    closePropBandModal();
-    await refresh();
-  }
-
   async function clearAlarms() {
     clearAlarmsBusy = true;
     syncClearAlarmsButton();
@@ -1582,22 +1312,6 @@
       alert('Alarm reset failed: ' + e);
     } finally {
       clearAlarmsBusy = false;
-      await refresh();
-    }
-  }
-
-  async function toggleHumidifier() {
-    const btn = document.getElementById('humidifierToggleBtn');
-    btn.disabled = true;
-    try {
-      const r = await fetch('api/humidifier-toggle', { method: 'POST' });
-      const j = await r.json();
-      if (!j.ok) {
-        alert('Humidifier toggle failed: ' + (j.error || 'unknown'));
-      }
-    } catch (e) {
-      alert('Humidifier toggle failed: ' + e);
-    } finally {
       await refresh();
     }
   }
@@ -1630,42 +1344,6 @@
     }
   }
 
-  document.getElementById('editSetpointBtn').addEventListener('click', openSetpointModal);
-  document.getElementById('saveSetpointBtn').addEventListener('click', saveSetpoint);
-  document.getElementById('cancelSetpointBtn').addEventListener('click', closeSetpointModal);
-  document.getElementById('setpointInput').addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      saveSetpoint();
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      closeSetpointModal();
-    }
-  });
-  document.getElementById('editMaxProductionBtn').addEventListener('click', openMaxProductionModal);
-  document.getElementById('saveMaxProductionBtn').addEventListener('click', saveMaxProduction);
-  document.getElementById('cancelMaxProductionBtn').addEventListener('click', closeMaxProductionModal);
-  document.getElementById('maxProductionInput').addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      saveMaxProduction();
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      closeMaxProductionModal();
-    }
-  });
-  document.getElementById('editPropBandBtn').addEventListener('click', openPropBandModal);
-  document.getElementById('savePropBandBtn').addEventListener('click', savePropBand);
-  document.getElementById('cancelPropBandBtn').addEventListener('click', closePropBandModal);
-  document.getElementById('propBandInput').addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      savePropBand();
-    } else if (event.key === 'Escape') {
-      event.preventDefault();
-      closePropBandModal();
-    }
-  });
   document.getElementById('editRtcBtn').addEventListener('click', openRtcModal);
   document.getElementById('cancelRtcBtn').addEventListener('click', closeRtcModal);
   document.getElementById('saveRtcBtn').addEventListener('click', saveRtc);
@@ -1679,27 +1357,11 @@
       closeRtcModal();
     }
   });
-  document.getElementById('setpointModalBackdrop').addEventListener('click', (event) => {
-    if (event.target.id === 'setpointModalBackdrop') {
-      closeSetpointModal();
-    }
-  });
-  document.getElementById('maxProductionModalBackdrop').addEventListener('click', (event) => {
-    if (event.target.id === 'maxProductionModalBackdrop') {
-      closeMaxProductionModal();
-    }
-  });
-  document.getElementById('propBandModalBackdrop').addEventListener('click', (event) => {
-    if (event.target.id === 'propBandModalBackdrop') {
-      closePropBandModal();
-    }
-  });
   document.getElementById('menuEditModalBackdrop').addEventListener('click', (event) => {
     if (event.target.id === 'menuEditModalBackdrop') {
       closeMenuEditModal();
     }
   });
-  document.getElementById('humidifierToggleBtn').addEventListener('click', toggleHumidifier);
   document.getElementById('drainCyl1Btn').addEventListener('click', async () => {
     const btn = document.getElementById('drainCyl1Btn');
     btn.disabled = true;
@@ -1714,9 +1376,6 @@
   });
   document.getElementById('rebootBtn').addEventListener('click', rebootDevice);
   document.getElementById('clearAlarmsBtn').addEventListener('click', clearAlarms);
-  document.getElementById('menuUpBtn').addEventListener('click', () => moveMenuSelection(-1));
-  document.getElementById('menuDownBtn').addEventListener('click', () => moveMenuSelection(1));
-  document.getElementById('menuEnterBtn').addEventListener('click', openSelectedMenuItem);
   document.getElementById('menuBackBtn').addEventListener('click', goBackInMenu);
   document.getElementById('menuHomeBtn').addEventListener('click', goHomeInMenu);
   document.getElementById('menuFontSizeRange').addEventListener('input', (event) => {
