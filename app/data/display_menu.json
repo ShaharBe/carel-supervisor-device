@@ -223,27 +223,35 @@
                     "options": [
                       {
                         "value": 0,
-                        "label": "0-1 v"
+                        "label": "0-1 V"
                       },
                       {
                         "value": 1,
-                        "label": "0-10 v"
+                        "label": "0-10 V"
                       },
                       {
                         "value": 2,
-                        "label": "2-10 v"
+                        "label": "2-10 V"
                       },
                       {
                         "value": 3,
-                        "label": "0-20 ma"
+                        "label": "0-20 mA"
                       },
                       {
                         "value": 4,
-                        "label": "4-20 ma"
+                        "label": "4-20 mA"
                       },
                       {
                         "value": 5,
-                        "label": "ntc carel standard"
+                        "label": "0-135 ohm"
+                      },
+                      {
+                        "value": 6,
+                        "label": "135-1000 ohm"
+                      },
+                      {
+                        "value": 7, 
+                        "label": "NTC CAREL standard"
                       }
                     ]
                   },
@@ -290,6 +298,14 @@
                       },
                       {
                         "value": 5,
+                        "label": "0-135 ohm"
+                      },
+                      {
+                        "value": 6,
+                        "label": "135-1000 ohm"
+                      },
+                      {
+                        "value": 7,
                         "label": "NTC CAREL standard"
                       }
                     ]
