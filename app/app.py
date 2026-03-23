@@ -61,6 +61,7 @@ from modbus_map import (
     SETPOINT_REG,
     SETPOINT_SCALE,
     TEMP_REG,
+    d_to_modbus_coil_addr,
     qmm_to_modbus_addr,
 )
 from runtime import (
@@ -357,7 +358,7 @@ def read_menu_value_from_controller(node: dict[str, Any]) -> dict[str, Any]:
   with modbus_lock:
     modbus_connect_or_raise()
     if family == "D":
-      rr = read_coils(address=index, count=1)
+      rr = read_coils(address=d_to_modbus_coil_addr(index), count=1)
       if rr.isError():
         raise RuntimeError(f"Modbus read error (coil {index}): {rr}")
       raw_value = bool(rr.bits[0]) if rr.bits else False
@@ -446,11 +447,12 @@ def write_menu_value_to_controller(node: dict[str, Any], incoming_value: Any) ->
   with modbus_lock:
     modbus_connect_or_raise()
     if family == "D":
-      if index == HUMIDIFIER_REMOTE_ONOFF_COIL:
+      coil_address = d_to_modbus_coil_addr(index)
+      if coil_address == HUMIDIFIER_REMOTE_ONOFF_COIL:
         enable_wr = write_coil(address=HUMIDIFIER_SUPERVISOR_ENABLE_COIL, value=True)
         if enable_wr.isError():
           raise RuntimeError(f"Modbus write error (humidifier supervisor enable coil): {enable_wr}")
-      wr = write_coil(address=index, value=bool(raw_value))
+      wr = write_coil(address=coil_address, value=bool(raw_value))
       if wr.isError():
         raise RuntimeError(f"Modbus write error (coil {index}): {wr}")
     else:

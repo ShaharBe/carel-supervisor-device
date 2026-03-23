@@ -8,6 +8,13 @@ def qmm_to_modbus_addr(qmm_reg_1_based: int) -> int:
     return qmm_reg_1_based - 1
 
 
+def d_to_modbus_coil_addr(d_coil_0_based: int) -> int:
+    """Return a D/coil address unchanged after validating it is already 0-based."""
+    if d_coil_0_based < 0:
+        raise ValueError("Coil address must be >= 0 (direct 0-based Modbus coil address).")
+    return d_coil_0_based
+
+
 # QModMaster-style 1-based register numbers.
 TEMP_REG = 2
 SETPOINT_REG = 20
