@@ -18,11 +18,358 @@
   };
   let lastAlarmState = null;
   let clearAlarmsBusy = false;
+  let menuPayload = null;
+  let menuIndex = new Map();
+  let menuCurrentPath = '';
+  let menuSelectedIndex = 0;
+  const menuViewportSize = 6;
 
   function browserDateTimeLocalValue() {
     const now = new Date();
     const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
     return local.toISOString().slice(0, 16);
+  }
+
+  function parseMenuPayload() {
+    try {
+      const node = document.getElementById('displayMenuData');
+      return JSON.parse(node.textContent);
+    } catch (e) {
+      return {
+        ok: false,
+        error: 'Unable to read menu definition from page: ' + e,
+        root: { path: '', title: 'Root', display_label: 'Root', kind: 'root', children: [] }
+      };
+    }
+  }
+
+  function indexMenuTree(node, parentPath) {
+    if (!node) {
+      return;
+    }
+
+    node.parent_path = parentPath;
+    menuIndex.set(node.path, node);
+    (node.children || []).forEach((child) => indexMenuTree(child, node.path));
+  }
+
+  function initializeMenuWidget() {
+    menuPayload = parseMenuPayload();
+    menuIndex = new Map();
+    indexMenuTree(menuPayload.root, null);
+    menuCurrentPath = '';
+    menuSelectedIndex = 0;
+    renderMenuWidget();
+  }
+
+  function getMenuNode(path) {
+    return menuIndex.get(path) || menuPayload.root;
+  }
+
+  function getCurrentMenuChildren() {
+    return getMenuNode(menuCurrentPath).children || [];
+  }
+
+  function clampMenuSelection() {
+    const children = getCurrentMenuChildren();
+    if (children.length === 0) {
+      menuSelectedIndex = 0;
+      return;
+    }
+
+    if (menuSelectedIndex < 0) {
+      menuSelectedIndex = children.length - 1;
+    } else if (menuSelectedIndex >= children.length) {
+      menuSelectedIndex = 0;
+    }
+  }
+
+  function getSelectedMenuNode() {
+    const children = getCurrentMenuChildren();
+    if (children.length === 0) {
+      return null;
+    }
+    clampMenuSelection();
+    return children[menuSelectedIndex];
+  }
+
+  function menuLineHint(node) {
+    if (node.kind === 'menu') {
+      return '\u203A';
+    }
+    if (node.kind === 'page_link') {
+      return node.page_direction === 'prev' ? '\u2190' : '\u2192';
+    }
+    if (node.kind === 'caption') {
+      return 'CAP';
+    }
+    if (node.kind === 'stub') {
+      return 'TBD';
+    }
+    return node.register ? node.register.access : 'R';
+  }
+
+  function menuLocalIndex(node) {
+    if (!node || !node.path) {
+      return '';
+    }
+    const parts = node.path.split('.');
+    return parts[parts.length - 1];
+  }
+
+  function buildMenuBreadcrumb(node) {
+    const labels = [];
+    let current = node;
+    while (current && current.path !== '') {
+      labels.unshift(current.display_label || current.title || current.path);
+      current = current.parent_path === null ? null : getMenuNode(current.parent_path);
+    }
+    return labels.length > 0 ? labels.join(' > ') : 'Root';
+  }
+
+  function menuDetailMeta(node) {
+    const fragments = [];
+    if (node.kind === 'menu') {
+      const count = (node.children || []).length;
+      const itemLabel = count === 1 ? 'item' : 'items';
+      fragments.push('Submenu with ' + count + ' ' + itemLabel);
+    } else if (node.kind === 'caption') {
+      fragments.push('Display-only caption');
+    } else if (node.kind === 'page_link') {
+      fragments.push('Page navigation item');
+    } else if (node.kind === 'stub') {
+      fragments.push('Defined, but still marked stub/TBD');
+    } else {
+      fragments.push('Leaf item');
+    }
+
+    if (node.register) {
+      fragments.push(
+        'Register ' + node.register.family + ',' + node.register.index + ' (' + node.register.access + ')'
+      );
+    }
+
+    if (node.range_or_options) {
+      fragments.push('Options/range: ' + node.range_or_options);
+    }
+
+    return fragments.join(' | ');
+  }
+
+  function renderMenuDetail(node) {
+    const detail = document.getElementById('menuDetail');
+    detail.replaceChildren();
+
+    if (!node) {
+      detail.textContent = 'This menu has no items.';
+      detail.className = 'menu-detail muted';
+      return;
+    }
+
+    detail.className = 'menu-detail';
+
+    const title = document.createElement('div');
+    title.className = 'menu-detail-title';
+    title.textContent = node.display_label || node.title || 'Unnamed item';
+    detail.appendChild(title);
+
+    const meta = document.createElement('div');
+    meta.className = 'menu-detail-meta';
+    meta.textContent = menuDetailMeta(node);
+    detail.appendChild(meta);
+
+    const guidance = document.createElement('div');
+    guidance.className = 'menu-detail-note';
+    if (node.kind === 'menu') {
+      guidance.textContent = 'Press Enter to open this submenu.';
+    } else if (node.kind === 'page_link') {
+      guidance.textContent =
+        node.page_direction === 'prev'
+          ? 'Press Enter to jump to the previous sibling page.'
+          : 'Press Enter to jump to the next sibling page.';
+    } else {
+      guidance.textContent = 'This prototype only sketches navigation, so leaf actions are not wired yet.';
+    }
+    detail.appendChild(guidance);
+
+    if (node.note) {
+      const note = document.createElement('div');
+      note.className = 'menu-detail-note';
+      note.textContent = 'Note: ' + node.note;
+      detail.appendChild(note);
+    }
+
+    const raw = document.createElement('div');
+    raw.className = 'menu-detail-raw';
+    raw.textContent = 'Definition: ' + node.raw_text;
+    detail.appendChild(raw);
+  }
+
+  function syncMenuControls(children) {
+    const hasSelection = children.length > 0;
+    document.getElementById('menuUpBtn').disabled = !hasSelection;
+    document.getElementById('menuDownBtn').disabled = !hasSelection;
+    document.getElementById('menuEnterBtn').disabled = !hasSelection;
+    document.getElementById('menuBackBtn').disabled = menuCurrentPath === '';
+    document.getElementById('menuHomeBtn').disabled = menuCurrentPath === '';
+  }
+
+  function renderMenuWidget() {
+    const screen = document.getElementById('menuScreen');
+    const path = document.getElementById('menuWidgetPath');
+    const state = document.getElementById('menuWidgetState');
+
+    if (!menuPayload || !menuPayload.ok) {
+      path.textContent = 'Menu unavailable';
+      state.textContent = 'Read error';
+      state.className = 'menu-widget-state err';
+      screen.replaceChildren();
+
+      const empty = document.createElement('div');
+      empty.className = 'menu-line-empty';
+      empty.textContent = menuPayload?.error || 'Menu definition is unavailable.';
+      screen.appendChild(empty);
+
+      renderMenuDetail(null);
+      syncMenuControls([]);
+      return;
+    }
+
+    const currentMenu = getMenuNode(menuCurrentPath);
+    const children = currentMenu.children || [];
+    clampMenuSelection();
+
+    path.textContent = buildMenuBreadcrumb(currentMenu);
+    state.textContent = children.length + ' item' + (children.length === 1 ? '' : 's');
+    state.className = 'menu-widget-state muted';
+
+    screen.replaceChildren();
+
+    if (children.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'menu-line-empty';
+      empty.textContent = 'This menu is empty.';
+      screen.appendChild(empty);
+      renderMenuDetail(null);
+      syncMenuControls(children);
+      return;
+    }
+
+    let start = 0;
+    if (children.length > menuViewportSize) {
+      start = Math.max(0, menuSelectedIndex - Math.floor(menuViewportSize / 2));
+      start = Math.min(start, children.length - menuViewportSize);
+    }
+
+    children.slice(start, start + menuViewportSize).forEach((child, visibleIndex) => {
+      const actualIndex = start + visibleIndex;
+      const line = document.createElement('button');
+      line.type = 'button';
+      line.className = 'menu-line menu-line-' + child.kind + (actualIndex === menuSelectedIndex ? ' is-active' : '');
+      line.setAttribute('role', 'option');
+      line.setAttribute('aria-selected', actualIndex === menuSelectedIndex ? 'true' : 'false');
+      line.title = child.raw_text;
+      line.addEventListener('click', () => {
+        menuSelectedIndex = actualIndex;
+        renderMenuWidget();
+        screen.focus();
+      });
+      line.addEventListener('dblclick', () => {
+        menuSelectedIndex = actualIndex;
+        openSelectedMenuItem();
+      });
+
+      const index = document.createElement('span');
+      index.className = 'menu-line-index';
+      index.textContent = menuLocalIndex(child);
+
+      const label = document.createElement('span');
+      label.className = 'menu-line-label';
+      label.textContent = child.display_label || child.title || child.path;
+
+      const hint = document.createElement('span');
+      hint.className = 'menu-line-hint';
+      hint.textContent = menuLineHint(child);
+
+      line.append(index, label, hint);
+      screen.appendChild(line);
+    });
+
+    renderMenuDetail(getSelectedMenuNode());
+    syncMenuControls(children);
+  }
+
+  function moveMenuSelection(delta) {
+    const children = getCurrentMenuChildren();
+    if (children.length === 0) {
+      return;
+    }
+
+    menuSelectedIndex += delta;
+    clampMenuSelection();
+    renderMenuWidget();
+    document.getElementById('menuScreen').focus();
+  }
+
+  function navigateToMenu(path) {
+    menuCurrentPath = path;
+    menuSelectedIndex = 0;
+    renderMenuWidget();
+    document.getElementById('menuScreen').focus();
+  }
+
+  function openSiblingMenu(direction) {
+    const currentMenu = getMenuNode(menuCurrentPath);
+    if (!currentMenu || currentMenu.path === '') {
+      return;
+    }
+
+    const parent = getMenuNode(currentMenu.parent_path || '');
+    const siblingMenus = (parent.children || []).filter((child) => child.kind === 'menu');
+    const currentIndex = siblingMenus.findIndex((child) => child.path === currentMenu.path);
+    if (currentIndex === -1) {
+      return;
+    }
+
+    const offset = direction === 'prev' ? -1 : 1;
+    const target = siblingMenus[currentIndex + offset];
+    if (!target) {
+      return;
+    }
+
+    navigateToMenu(target.path);
+  }
+
+  function openSelectedMenuItem() {
+    const selected = getSelectedMenuNode();
+    if (!selected) {
+      return;
+    }
+
+    if (selected.kind === 'menu') {
+      navigateToMenu(selected.path);
+      return;
+    }
+
+    if (selected.kind === 'page_link') {
+      openSiblingMenu(selected.page_direction);
+      return;
+    }
+
+    renderMenuWidget();
+  }
+
+  function goBackInMenu() {
+    if (menuCurrentPath === '') {
+      return;
+    }
+
+    const currentMenu = getMenuNode(menuCurrentPath);
+    navigateToMenu(currentMenu.parent_path || '');
+  }
+
+  function goHomeInMenu() {
+    navigateToMenu('');
   }
 
   function openRtcModal() {
@@ -634,6 +981,30 @@
   });
   document.getElementById('rebootBtn').addEventListener('click', rebootDevice);
   document.getElementById('clearAlarmsBtn').addEventListener('click', clearAlarms);
+  document.getElementById('menuUpBtn').addEventListener('click', () => moveMenuSelection(-1));
+  document.getElementById('menuDownBtn').addEventListener('click', () => moveMenuSelection(1));
+  document.getElementById('menuEnterBtn').addEventListener('click', openSelectedMenuItem);
+  document.getElementById('menuBackBtn').addEventListener('click', goBackInMenu);
+  document.getElementById('menuHomeBtn').addEventListener('click', goHomeInMenu);
+  document.getElementById('menuScreen').addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveMenuSelection(-1);
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      moveMenuSelection(1);
+    } else if (event.key === 'Enter' || event.key === 'ArrowRight') {
+      event.preventDefault();
+      openSelectedMenuItem();
+    } else if (event.key === 'Escape' || event.key === 'ArrowLeft' || event.key === 'Backspace') {
+      event.preventDefault();
+      goBackInMenu();
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      goHomeInMenu();
+    }
+  });
 
+  initializeMenuWidget();
   refresh();
   setInterval(refresh, 1000);

@@ -25,6 +25,7 @@ from flask import Flask, Response, jsonify, render_template, request
 
 from alarms import ALARM_CATALOG
 from client_factory import is_simulator_mode
+from display_menu import load_display_menu
 from modbus_map import (
     ALARM_RESET_COIL,
     DRAIN_CYL1_COIL,
@@ -228,6 +229,7 @@ def index() -> str:
         "index.html",
         APP_TITLE=app_title,
         APP_COMMIT_HASH=APP_COMMIT_HASH,
+        DISPLAY_MENU=load_display_menu(),
     )
 
 

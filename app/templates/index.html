@@ -58,6 +58,32 @@
       <button id="editPropBandBtn" class="small-btn" type="button" disabled>Edit</button>
     </div>
 
+    <section class="menu-widget" aria-labelledby="menuWidgetTitle">
+      <div class="menu-widget-head">
+        <div>
+          <h3 id="menuWidgetTitle" class="menu-widget-title">Controller Menu</h3>
+          <div id="menuWidgetPath" class="menu-widget-path muted">Loading menu path...</div>
+        </div>
+        <span id="menuWidgetState" class="menu-widget-state muted">Loading...</span>
+      </div>
+
+      <div class="lcd-shell">
+        <div id="menuScreen" class="menu-screen" tabindex="0" role="listbox" aria-label="Controller menu items"></div>
+      </div>
+
+      <div class="menu-nav">
+        <button id="menuUpBtn" class="small-btn" type="button">Up</button>
+        <button id="menuEnterBtn" class="small-btn" type="button">Enter</button>
+        <button id="menuDownBtn" class="small-btn" type="button">Down</button>
+        <button id="menuBackBtn" class="small-btn" type="button">Back</button>
+        <button id="menuHomeBtn" class="small-btn" type="button">Home</button>
+      </div>
+
+      <div id="menuDetail" class="menu-detail muted">
+        Select a menu item to explore the legacy panel structure.
+      </div>
+    </section>
+
     <section class="alarms-panel" aria-labelledby="alarmsTitle">
       <div class="alarms-head">
         <div>
@@ -189,6 +215,7 @@
     </div>
   </div>
 
+  <script id="displayMenuData" type="application/json">{{ DISPLAY_MENU|tojson }}</script>
   <script src="static/app.js"></script>
 </body>
 </html>
