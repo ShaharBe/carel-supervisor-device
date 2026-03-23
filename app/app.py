@@ -15,6 +15,7 @@ Then open:
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import time
 from dataclasses import dataclass
@@ -60,6 +61,7 @@ from modbus_map import (
     SETPOINT_REG,
     SETPOINT_SCALE,
     TEMP_REG,
+    qmm_to_modbus_addr,
 )
 from runtime import (
     BAUDRATE,
@@ -80,7 +82,9 @@ from runtime import (
     note_runtime_error,
     now_iso,
     poll_registers_once,
+    read_coils,
     read_device_rtc_values,
+    read_holding_registers,
     read_log_tail,
     reset_modbus_client,
     start_background_poller,
@@ -107,9 +111,16 @@ class WritableField:
     cache_scaled_attr: str
     log_label: str
     unit_label: str
+    menu_path: str | None = None
 
 
 APP_COMMIT_HASH = read_runtime_commit_hash()
+MENU_SETPOINT_PATH = "2.1"
+MENU_HUMIDIFIER_PATH = "2.2"
+MENU_MAX_PRODUCTION_PATH = "2.3"
+MENU_PROP_BAND_PATH = "2.4"
+NUMERIC_RANGE_RE = re.compile(r"(-?\d+(?:\.\d+)?)\s*(?:\.{2,3})\s*(-?\d+(?:\.\d+)?)")
+FLOAT_LABEL_RE = re.compile(r"\b(offset|band|setpoint|hyster)\b", re.IGNORECASE)
 
 SETPOINT_FIELD = WritableField(
     request_key="temp_c",
@@ -122,6 +133,7 @@ SETPOINT_FIELD = WritableField(
     cache_scaled_attr="last_setpoint_c",
     log_label="Setpoint",
     unit_label="C",
+    menu_path=MENU_SETPOINT_PATH,
 )
 MAX_PRODUCTION_FIELD = WritableField(
     request_key="value_pct",
@@ -134,6 +146,7 @@ MAX_PRODUCTION_FIELD = WritableField(
     cache_scaled_attr="max_production_pct",
     log_label="Max production",
     unit_label="%",
+    menu_path=MENU_MAX_PRODUCTION_PATH,
 )
 PROP_BAND_FIELD = WritableField(
     request_key="value_c",
@@ -146,11 +159,340 @@ PROP_BAND_FIELD = WritableField(
     cache_scaled_attr="prop_band_c",
     log_label="Prop. band",
     unit_label="C",
+    menu_path=MENU_PROP_BAND_PATH,
 )
 
 
 def format_limit(value: float) -> str:
   return f"{value:g}"
+
+
+def walk_menu_nodes(node: dict[str, Any]):
+  yield node
+  for child in node.get("children", []):
+    yield from walk_menu_nodes(child)
+
+
+def find_menu_node(path: str) -> dict[str, Any] | None:
+  payload = load_display_menu()
+  if not payload.get("ok"):
+    return None
+
+  for node in walk_menu_nodes(payload["root"]):
+    if node.get("path") == path:
+      return node
+  return None
+
+
+def normalize_editor_options(node: dict[str, Any]) -> list[dict[str, Any]]:
+  editor = node.get("editor")
+  options = editor.get("options") if isinstance(editor, dict) else None
+
+  normalized: list[dict[str, Any]] = []
+  if isinstance(options, list):
+    for index, option in enumerate(options):
+      if isinstance(option, dict):
+        normalized.append({
+          "value": option.get("value", index),
+          "label": option.get("label", str(option.get("value", index))),
+        })
+      else:
+        normalized.append({"value": index, "label": str(option)})
+
+  if normalized:
+    return normalized
+
+  for index, token in enumerate(parse_choice_tokens(str(node.get("range_or_options") or ""))):
+    normalized.append({"value": index, "label": token})
+  return normalized
+
+
+def parse_choice_tokens(text: str | None) -> list[str]:
+  if not text:
+    return []
+
+  separator = "," if "," in text else ("/" if "/" in text else None)
+  if separator is None:
+    return []
+
+  return [token.strip().strip('"') for token in text.split(separator) if token.strip()]
+
+
+def infer_menu_editor_type(node: dict[str, Any]) -> str | None:
+  editor = node.get("editor")
+  if isinstance(editor, dict) and isinstance(editor.get("type"), str):
+    return str(editor["type"])
+
+  register = node.get("register") or {}
+  family = register.get("family")
+  if family == "D":
+    return "boolean"
+
+  range_hint = str(node.get("range_or_options") or "")
+  if len(parse_choice_tokens(range_hint)) >= 2 and NUMERIC_RANGE_RE.search(range_hint) is None:
+    return "enum"
+
+  if family in {"A", "I"}:
+    label = str(node.get("display_label") or "")
+    if re.search(r"\d+\.\d+", range_hint) or FLOAT_LABEL_RE.search(label):
+      return "float"
+    return "integer"
+
+  return None
+
+
+def infer_menu_numeric_scale(node: dict[str, Any], editor_type: str | None) -> float:
+  editor = node.get("editor")
+  if isinstance(editor, dict) and editor.get("scale") is not None:
+    return float(editor["scale"])
+
+  path = str(node.get("path") or "")
+  if path == MENU_SETPOINT_PATH:
+    return SETPOINT_SCALE
+  if path == MENU_MAX_PRODUCTION_PATH:
+    return MAX_PRODUCTION_SCALE
+  if path == MENU_PROP_BAND_PATH:
+    return PROP_BAND_SCALE
+
+  range_hint = str(node.get("range_or_options") or "")
+  label = str(node.get("display_label") or "")
+  if editor_type == "float" or re.search(r"\d+\.\d+", range_hint) or FLOAT_LABEL_RE.search(label):
+    return 10.0
+  return 1.0
+
+
+def infer_menu_numeric_limits(node: dict[str, Any]) -> tuple[float | None, float | None]:
+  path = str(node.get("path") or "")
+  if path == MENU_SETPOINT_PATH:
+    return SETPOINT_MIN_C, SETPOINT_MAX_C
+  if path == MENU_MAX_PRODUCTION_PATH:
+    return MAX_PRODUCTION_MIN_PCT, MAX_PRODUCTION_MAX_PCT
+  if path == MENU_PROP_BAND_PATH:
+    return PROP_BAND_MIN_C, PROP_BAND_MAX_C
+
+  hint = str(node.get("range_or_options") or "")
+  match = NUMERIC_RANGE_RE.search(hint)
+  if not match:
+    return None, None
+  return float(match.group(1)), float(match.group(2))
+
+
+def is_menu_node_modbus_backed(node: dict[str, Any]) -> bool:
+  register = node.get("register")
+  return isinstance(register, dict) and register.get("family") in {"A", "I", "D"}
+
+
+def is_menu_node_writable(node: dict[str, Any]) -> bool:
+  register = node.get("register")
+  return isinstance(register, dict) and register.get("access") == "R/W"
+
+
+def cache_menu_value(path: str, *, raw: Any, value: Any, source: str) -> None:
+  with cache_lock:
+    cache.menu_values[path] = {
+      "raw": raw,
+      "value": value,
+      "source": source,
+      "updated_utc": now_iso(),
+      "error": None,
+    }
+
+    if path == MENU_SETPOINT_PATH:
+      cache.last_setpoint_raw = int(raw)
+      cache.last_setpoint_c = float(value)
+    elif path == MENU_MAX_PRODUCTION_PATH:
+      cache.max_production_raw = int(raw)
+      cache.max_production_pct = float(value)
+    elif path == MENU_PROP_BAND_PATH:
+      cache.prop_band_raw = int(raw)
+      cache.prop_band_c = float(value)
+    elif path == MENU_HUMIDIFIER_PATH:
+      cache.humidifier_network_enabled = bool(value)
+
+
+def cache_menu_error(path: str, error_message: str) -> None:
+  with cache_lock:
+    previous = cache.menu_values.get(path, {})
+    cache.menu_values[path] = {
+      **previous,
+      "error": error_message,
+      "updated_utc": now_iso(),
+    }
+
+
+def get_cached_menu_value(path: str) -> dict[str, Any] | None:
+  with cache_lock:
+    cached_value = cache.menu_values.get(path)
+    if cached_value is None:
+      return None
+    return dict(cached_value)
+
+
+def serialize_menu_value(node: dict[str, Any], cached_value: dict[str, Any], *, cached: bool) -> dict[str, Any]:
+  return {
+    "ok": cached_value.get("error") is None,
+    "path": node.get("path"),
+    "label": node.get("display_label") or node.get("title") or node.get("path"),
+    "writable": is_menu_node_writable(node),
+    "modbus_backed": is_menu_node_modbus_backed(node),
+    "value": cached_value.get("value"),
+    "raw": cached_value.get("raw"),
+    "source": cached_value.get("source"),
+    "updated_utc": cached_value.get("updated_utc"),
+    "cached": cached,
+    "error": cached_value.get("error"),
+  }
+
+
+def read_menu_value_from_controller(node: dict[str, Any]) -> dict[str, Any]:
+  if not is_menu_node_modbus_backed(node):
+    raise ValueError("This menu leaf is not mapped to Modbus yet.")
+
+  register = node["register"]
+  family = str(register["family"])
+  index = int(register["index"])
+  editor_type = infer_menu_editor_type(node)
+  path = str(node["path"])
+
+  with modbus_lock:
+    modbus_connect_or_raise()
+    if family == "D":
+      rr = read_coils(address=index, count=1)
+      if rr.isError():
+        raise RuntimeError(f"Modbus read error (coil {index}): {rr}")
+      raw_value = bool(rr.bits[0]) if rr.bits else False
+      value = raw_value
+    else:
+      address = qmm_to_modbus_addr(index)
+      rr = read_holding_registers(address=address, count=1)
+      if rr.isError():
+        raise RuntimeError(f"Modbus read error (register {index}): {rr}")
+      if not rr.registers:
+        raise RuntimeError(f"Modbus read returned no value for register {index}")
+      raw_value = int(rr.registers[0])
+      scale = infer_menu_numeric_scale(node, editor_type)
+      value = raw_value / scale if editor_type == "float" else raw_value
+
+  cache_menu_value(path, raw=raw_value, value=value, source="modbus")
+  return {"path": path, "raw": raw_value, "value": value}
+
+
+def parse_menu_boolean_value(value: Any) -> bool:
+  if isinstance(value, bool):
+    return value
+  if isinstance(value, (int, float)):
+    return bool(value)
+  if isinstance(value, str):
+    lowered = value.strip().lower()
+    if lowered in {"true", "1", "yes", "on", "enabled", "auto"}:
+      return True
+    if lowered in {"false", "0", "no", "off", "disabled"}:
+      return False
+  raise ValueError("value must be a boolean")
+
+
+def coerce_menu_write(node: dict[str, Any], incoming_value: Any) -> tuple[Any, int | bool]:
+  editor_type = infer_menu_editor_type(node)
+  if editor_type is None:
+    raise ValueError("Unable to infer the value type for this menu leaf.")
+
+  if editor_type == "boolean":
+    bool_value = parse_menu_boolean_value(incoming_value)
+    return bool_value, bool_value
+
+  if editor_type == "enum":
+    options = normalize_editor_options(node)
+    if options:
+      for option in options:
+        if str(option["value"]) == str(incoming_value):
+          selected_value = option["value"]
+          break
+      else:
+        raise ValueError("value must match one of the supported enum options")
+      if isinstance(selected_value, bool):
+        return selected_value, int(selected_value)
+      return int(selected_value), int(selected_value)
+
+  try:
+    numeric_value = float(incoming_value)
+  except (TypeError, ValueError) as exc:
+    raise ValueError("value must be numeric") from exc
+
+  low_limit, high_limit = infer_menu_numeric_limits(node)
+  if low_limit is not None and high_limit is not None and not (low_limit <= numeric_value <= high_limit):
+    raise ValueError(
+      f"value out of allowed range ({format_limit(low_limit)}..{format_limit(high_limit)})"
+    )
+
+  if editor_type == "integer":
+    integer_value = int(round(numeric_value))
+    return integer_value, integer_value
+
+  scale = infer_menu_numeric_scale(node, editor_type)
+  raw_value = int(round(numeric_value * scale))
+  return raw_value / scale, raw_value
+
+
+def write_menu_value_to_controller(node: dict[str, Any], incoming_value: Any) -> dict[str, Any]:
+  if not is_menu_node_modbus_backed(node) or not is_menu_node_writable(node):
+    raise ValueError("This menu leaf is not writable through Modbus yet.")
+
+  register = node["register"]
+  family = str(register["family"])
+  index = int(register["index"])
+  path = str(node["path"])
+  value, raw_value = coerce_menu_write(node, incoming_value)
+
+  with modbus_lock:
+    modbus_connect_or_raise()
+    if family == "D":
+      if index == HUMIDIFIER_REMOTE_ONOFF_COIL:
+        enable_wr = write_coil(address=HUMIDIFIER_SUPERVISOR_ENABLE_COIL, value=True)
+        if enable_wr.isError():
+          raise RuntimeError(f"Modbus write error (humidifier supervisor enable coil): {enable_wr}")
+      wr = write_coil(address=index, value=bool(raw_value))
+      if wr.isError():
+        raise RuntimeError(f"Modbus write error (coil {index}): {wr}")
+    else:
+      wr = write_register(address=qmm_to_modbus_addr(index), value=int(raw_value))
+      if wr.isError():
+        raise RuntimeError(f"Modbus write error (register {index}): {wr}")
+
+  cache_menu_value(path, raw=raw_value, value=value, source="write")
+  with cache_lock:
+    cache.last_write_utc = now_iso()
+    cache.last_error = None
+    if path == MENU_HUMIDIFIER_PATH and not bool(value):
+      cache.info_humidifier_status = 2
+
+  logger.info(
+    "Menu value written successfully: %s=%s on %s",
+    path,
+    value,
+    get_active_com_port(),
+  )
+
+  return {"path": path, "raw": raw_value, "value": value}
+
+
+def ensure_dashboard_config_cache() -> None:
+  with cache_lock:
+    missing_paths = []
+    if cache.last_setpoint_c is None:
+      missing_paths.append(MENU_SETPOINT_PATH)
+    if cache.max_production_pct is None:
+      missing_paths.append(MENU_MAX_PRODUCTION_PATH)
+    if cache.prop_band_c is None:
+      missing_paths.append(MENU_PROP_BAND_PATH)
+
+  for path in missing_paths:
+    node = find_menu_node(path)
+    if not node:
+      continue
+    try:
+      read_menu_value_from_controller(node)
+    except Exception as exc:
+      cache_menu_error(path, normalize_modbus_error(exc))
 
 
 def write_writable_field(field: WritableField):
@@ -187,6 +529,8 @@ def write_writable_field(field: WritableField):
       setattr(cache, field.cache_raw_attr, raw_value)
       setattr(cache, field.cache_scaled_attr, scaled_value)
       cache.last_error = None
+    if field.menu_path:
+      cache_menu_value(field.menu_path, raw=raw_value, value=scaled_value, source="write")
 
     logger.info(
       "%s written successfully: %.1f %s on %s",
@@ -220,6 +564,7 @@ app = Flask(__name__)
 
 @app.route("/", methods=["GET"])
 def index() -> str:
+    ensure_dashboard_config_cache()
     app_title = (
         "CAREL\u2122 Supervisory System [Simulator]"
         if is_simulator_mode()
@@ -325,6 +670,77 @@ def api_temp():
     return jsonify(resp)
 
 
+@app.route("/api/menu-value", methods=["GET"])
+def api_menu_value_get():
+    path = (request.args.get("path") or "").strip()
+    if not path:
+        return jsonify({"ok": False, "error": "Query string must include 'path'."}), 400
+
+    node = find_menu_node(path)
+    if not node:
+        return jsonify({"ok": False, "error": f"Menu path '{path}' was not found."}), 404
+    if not is_menu_node_modbus_backed(node):
+        return jsonify({"ok": False, "error": "This menu leaf is not mapped to Modbus yet."}), 400
+
+    refresh_requested = str(request.args.get("refresh", "")).strip().lower() in {"1", "true", "yes"}
+    if not refresh_requested:
+        cached_value = get_cached_menu_value(path)
+        if cached_value is not None and cached_value.get("value") is not None:
+            return jsonify(serialize_menu_value(node, cached_value, cached=True))
+
+    try:
+        read_menu_value_from_controller(node)
+        cached_value = get_cached_menu_value(path)
+        if cached_value is None:
+            raise RuntimeError("Menu value read succeeded, but no cached value was produced.")
+        clear_runtime_error()
+        return jsonify(serialize_menu_value(node, cached_value, cached=False))
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except Exception as exc:
+        reset_modbus_client()
+        error_message = normalize_modbus_error(exc)
+        note_runtime_error(error_message)
+        cache_menu_error(path, error_message)
+        return jsonify({"ok": False, "error": error_message, "path": path}), 400
+
+
+@app.route("/api/menu-value", methods=["POST"])
+def api_menu_value_post():
+    try:
+        body = request.get_json(force=True, silent=False)
+        if not isinstance(body, dict):
+            raise ValueError("JSON body must be an object.")
+
+        path = str(body.get("path", "")).strip()
+        if not path:
+            raise ValueError("JSON must include 'path'.")
+        if "value" not in body:
+            raise ValueError("JSON must include 'value'.")
+
+        node = find_menu_node(path)
+        if not node:
+            return jsonify({"ok": False, "error": f"Menu path '{path}' was not found."}), 404
+
+        write_menu_value_to_controller(node, body["value"])
+        cached_value = get_cached_menu_value(path)
+        if cached_value is None:
+            raise RuntimeError("Menu value write succeeded, but no cached value was produced.")
+        clear_runtime_error()
+        return jsonify(serialize_menu_value(node, cached_value, cached=False))
+    except ValueError as exc:
+        error_message = str(exc)
+        return jsonify({"ok": False, "error": error_message}), 400
+    except Exception as exc:
+        reset_modbus_client()
+        error_message = normalize_modbus_error(exc)
+        path = str((request.get_json(silent=True) or {}).get("path") or "").strip()
+        if path:
+            cache_menu_error(path, error_message)
+        note_runtime_error(error_message)
+        return jsonify({"ok": False, "error": error_message}), 400
+
+
 @app.route("/api/device-datetime", methods=["POST"])
 def api_device_datetime():
     try:
@@ -414,8 +830,11 @@ def api_humidifier_toggle():
 
         with cache_lock:
             cache.humidifier_network_enabled = target_state
+            cache.last_write_utc = now_iso()
             if not target_state:
                 cache.info_humidifier_status = 2
+            cache.last_error = None
+        cache_menu_value(MENU_HUMIDIFIER_PATH, raw=target_state, value=target_state, source="write")
 
         logger.info(
             "Humidifier remote on/off set to %s on %s",
@@ -512,6 +931,7 @@ def main() -> None:
     # Preflight read (optional) so you see something quickly
     time.sleep(0.2)
     poll_registers_once()
+    ensure_dashboard_config_cache()
     start_runtime_if_needed()
 
     # Run Flask dev server (fine for PoC)

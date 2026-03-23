@@ -27,7 +27,8 @@
     open: false,
     nodePath: null,
     editor: null,
-    draftValue: null
+    draftValue: null,
+    busy: false
   };
   const menuDisplayStorageKey = 'carel-menu-display-settings';
   const defaultMenuDisplaySettings = {
@@ -321,8 +322,36 @@
     };
   }
 
+  function isMenuNodeModbusBacked(node) {
+    return ['A', 'I', 'D'].includes(node?.register?.family);
+  }
+
+  function isMenuNodeWritable(node) {
+    return node?.register?.access === 'R/W';
+  }
+
+  function menuNodeSupportsRemoteRead(node) {
+    return isMenuNodeModbusBacked(node);
+  }
+
+  function menuNodeSupportsRemoteWrite(node) {
+    return isMenuNodeModbusBacked(node) && isMenuNodeWritable(node);
+  }
+
   function isMenuNodeEditable(node) {
-    return !['menu', 'caption', 'page_link'].includes(node?.kind) && getLeafEditor(node) !== null;
+    if (['menu', 'caption', 'page_link'].includes(node?.kind)) {
+      return false;
+    }
+
+    if (getLeafEditor(node) === null) {
+      return false;
+    }
+
+    if (isMenuNodeModbusBacked(node)) {
+      return isMenuNodeWritable(node);
+    }
+
+    return true;
   }
 
   function getDefaultNumericValue(node, editor) {
@@ -352,6 +381,24 @@
     }
 
     return getDefaultNumericValue(node, editor);
+  }
+
+  function syncMenuCacheFromDashboard(payload) {
+    if (payload.last_setpoint_c !== null && payload.last_setpoint_c !== undefined) {
+      menuValueStore.set('2.1', payload.last_setpoint_c);
+    }
+
+    if (payload.info?.humidifier_network_enabled !== null && payload.info?.humidifier_network_enabled !== undefined) {
+      menuValueStore.set('2.2', payload.info.humidifier_network_enabled);
+    }
+
+    if (payload.max_production_pct !== null && payload.max_production_pct !== undefined) {
+      menuValueStore.set('2.3', payload.max_production_pct);
+    }
+
+    if (payload.prop_band_c !== null && payload.prop_band_c !== undefined) {
+      menuValueStore.set('2.4', payload.prop_band_c);
+    }
   }
 
   function formatMenuValue(node, value, editorOverride) {
@@ -434,10 +481,14 @@
         node.page_direction === 'prev'
           ? 'Press Enter to jump to the previous sibling page.'
           : 'Press Enter to jump to the next sibling page.';
+    } else if (menuNodeSupportsRemoteWrite(node)) {
+      guidance.textContent = 'Double-click to load the current controller value and edit it.';
     } else if (isMenuNodeEditable(node)) {
       guidance.textContent = 'Double-click to edit this value locally.';
+    } else if (menuNodeSupportsRemoteRead(node)) {
+      guidance.textContent = 'This leaf is mapped to Modbus, but it is read-only.';
     } else {
-      guidance.textContent = 'This prototype only sketches navigation, so leaf actions are not wired yet.';
+      guidance.textContent = 'This leaf is not mapped to Modbus yet.';
     }
     detail.appendChild(guidance);
 
@@ -676,15 +727,31 @@
     return menuEditState.nodePath ? getMenuNode(menuEditState.nodePath) : null;
   }
 
-  function closeMenuEditModal() {
-    menuEditState = {
-      open: false,
-      nodePath: null,
-      editor: null,
-      draftValue: null
-    };
-    document.getElementById('menuEditModalBackdrop').classList.remove('open');
-    document.getElementById('menuEditModalBackdrop').setAttribute('aria-hidden', 'true');
+  function setMenuEditStatus(message, tone = 'muted') {
+    const status = document.getElementById('menuEditModalStatus');
+    status.textContent = message;
+    status.className = 'modal-status ' + tone;
+  }
+
+  function updateMenuEditCurrentText() {
+    const node = currentMenuEditNode();
+    const editor = menuEditState.editor;
+    if (!node || !editor) {
+      return;
+    }
+
+    document.getElementById('menuEditModalCurrent').textContent =
+      'Current value: ' + formatMenuValue(node, menuEditState.draftValue, editor);
+  }
+
+  function syncMenuEditBusyState() {
+    const busy = menuEditState.busy;
+    document.getElementById('saveMenuEditBtn').disabled = busy;
+    document.getElementById('menuEditNumberInput').disabled = busy;
+    document.getElementById('menuEditSelectInput').disabled = busy;
+    document.querySelectorAll('#menuEditChoiceGroup .menu-edit-choice').forEach((button) => {
+      button.disabled = busy;
+    });
   }
 
   function renderMenuEditChoices() {
@@ -702,6 +769,7 @@
       button.className =
         'menu-edit-choice' + (String(option.value) === String(menuEditState.draftValue) ? ' is-selected' : '');
       button.textContent = option.label;
+      button.disabled = menuEditState.busy;
       button.addEventListener('click', () => {
         menuEditState.draftValue = option.value;
         renderMenuEditChoices();
@@ -710,26 +778,11 @@
     });
   }
 
-  function openMenuEditModal(node) {
-    const editor = getLeafEditor(node);
+  function populateMenuEditForm() {
+    const editor = menuEditState.editor;
     if (!editor) {
       return;
     }
-
-    menuEditState = {
-      open: true,
-      nodePath: node.path,
-      editor,
-      draftValue: getCurrentMenuValue(node, editor)
-    };
-
-    document.getElementById('menuEditModalTitle').textContent = 'Edit ' + (node.display_label || node.title);
-    document.getElementById('menuEditModalPath').textContent = buildMenuBreadcrumb(node);
-    document.getElementById('menuEditModalCurrent').textContent =
-      'Current UI value: ' + formatMenuValue(node, menuEditState.draftValue, editor);
-    document.getElementById('menuEditModalStatus').textContent =
-      'UI-only edit. Save stores the value locally in this browser session.';
-    document.getElementById('menuEditModalStatus').className = 'modal-status muted';
 
     const choiceGroup = document.getElementById('menuEditChoiceGroup');
     const numberField = document.getElementById('menuEditNumberField');
@@ -760,32 +813,145 @@
     } else {
       numberField.hidden = false;
       numberInput.step = editor.step || (editor.type === 'float' ? 'any' : '1');
-      numberInput.value = String(menuEditState.draftValue);
+      numberInput.value =
+        menuEditState.draftValue === null || menuEditState.draftValue === undefined
+          ? ''
+          : String(menuEditState.draftValue);
     }
 
-    const backdrop = document.getElementById('menuEditModalBackdrop');
-    backdrop.classList.add('open');
-    backdrop.setAttribute('aria-hidden', 'false');
+    syncMenuEditBusyState();
+  }
+
+  function focusMenuEditField() {
+    const choiceGroup = document.getElementById('menuEditChoiceGroup');
+    const numberField = document.getElementById('menuEditNumberField');
+    const selectField = document.getElementById('menuEditSelectField');
+    const numberInput = document.getElementById('menuEditNumberInput');
+    const selectInput = document.getElementById('menuEditSelectInput');
 
     if (choiceGroup.hidden === false) {
       const firstChoice = choiceGroup.querySelector('button');
       firstChoice?.focus();
     } else if (selectField.hidden === false) {
       selectInput.focus();
-    } else {
+    } else if (numberField.hidden === false) {
       numberInput.focus();
       numberInput.select();
     }
   }
 
-  function saveMenuEdit() {
-    const node = currentMenuEditNode();
-    const editor = menuEditState.editor;
-    if (!node || !editor) {
+  async function fetchMenuNodeValue(node, { refresh = true } = {}) {
+    const query = new URLSearchParams({ path: node.path });
+    if (refresh) {
+      query.set('refresh', '1');
+    }
+
+    const response = await fetch('api/menu-value?' + query.toString());
+    const payload = await response.json();
+    if (!payload.ok) {
+      throw new Error(payload.error || 'Unable to read menu value.');
+    }
+
+    menuValueStore.set(node.path, payload.value);
+    return payload;
+  }
+
+  async function saveMenuNodeValue(node, value) {
+    const response = await fetch('api/menu-value', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: node.path, value })
+    });
+    const payload = await response.json();
+    if (!payload.ok) {
+      throw new Error(payload.error || 'Unable to write menu value.');
+    }
+
+    menuValueStore.set(node.path, payload.value);
+    return payload;
+  }
+
+  function closeMenuEditModal() {
+    menuEditState = {
+      open: false,
+      nodePath: null,
+      editor: null,
+      draftValue: null,
+      busy: false
+    };
+    document.getElementById('menuEditModalBackdrop').classList.remove('open');
+    document.getElementById('menuEditModalBackdrop').setAttribute('aria-hidden', 'true');
+  }
+
+  async function openMenuEditModal(node) {
+    const editor = getLeafEditor(node);
+    if (!editor) {
       return;
     }
 
-    const status = document.getElementById('menuEditModalStatus');
+    menuEditState = {
+      open: true,
+      nodePath: node.path,
+      editor,
+      draftValue: getCurrentMenuValue(node, editor),
+      busy: false
+    };
+
+    document.getElementById('menuEditModalTitle').textContent = 'Edit ' + (node.display_label || node.title);
+    document.getElementById('menuEditModalPath').textContent = buildMenuBreadcrumb(node);
+    updateMenuEditCurrentText();
+    if (menuNodeSupportsRemoteWrite(node)) {
+      setMenuEditStatus('Save writes this value to the controller.', 'muted');
+    } else {
+      setMenuEditStatus('UI-only edit. Save stores the value locally in this browser session.', 'muted');
+    }
+    populateMenuEditForm();
+
+    const backdrop = document.getElementById('menuEditModalBackdrop');
+    backdrop.classList.add('open');
+    backdrop.setAttribute('aria-hidden', 'false');
+    focusMenuEditField();
+
+    if (!menuNodeSupportsRemoteRead(node)) {
+      return;
+    }
+
+    menuEditState.busy = true;
+    setMenuEditStatus('Loading current value from controller...', 'muted');
+    syncMenuEditBusyState();
+
+    try {
+      const payload = await fetchMenuNodeValue(node, { refresh: true });
+      if (!menuEditState.open || menuEditState.nodePath !== node.path) {
+        return;
+      }
+
+      menuEditState.draftValue = payload.value;
+      populateMenuEditForm();
+      updateMenuEditCurrentText();
+      setMenuEditStatus('Current controller value loaded.', 'muted');
+    } catch (error) {
+      if (!menuEditState.open || menuEditState.nodePath !== node.path) {
+        return;
+      }
+
+      setMenuEditStatus('Read failed: ' + error.message, 'err');
+    } finally {
+      if (menuEditState.open && menuEditState.nodePath === node.path) {
+        menuEditState.busy = false;
+        syncMenuEditBusyState();
+        focusMenuEditField();
+      }
+    }
+  }
+
+  async function saveMenuEdit() {
+    const node = currentMenuEditNode();
+    const editor = menuEditState.editor;
+    if (!node || !editor || menuEditState.busy) {
+      return;
+    }
+
     let nextValue = menuEditState.draftValue;
 
     if (editor.type === 'enum' && !isChoiceButtonEditor(editor)) {
@@ -795,27 +961,46 @@
     } else if (editor.type === 'integer' || editor.type === 'float') {
       const raw = document.getElementById('menuEditNumberInput').value.trim();
       if (!raw) {
-        status.textContent = 'Enter a value first.';
-        status.className = 'modal-status err';
+        setMenuEditStatus('Enter a value first.', 'err');
         return;
       }
 
       nextValue = editor.type === 'float' ? Number.parseFloat(raw) : Number.parseInt(raw, 10);
       if (!Number.isFinite(nextValue)) {
-        status.textContent = 'Enter a valid number.';
-        status.className = 'modal-status err';
+        setMenuEditStatus('Enter a valid number.', 'err');
         return;
       }
     } else if (nextValue === null || nextValue === undefined) {
-      status.textContent = 'Choose a value first.';
-      status.className = 'modal-status err';
+      setMenuEditStatus('Choose a value first.', 'err');
       return;
     }
 
-    menuValueStore.set(node.path, nextValue);
+    if (!menuNodeSupportsRemoteWrite(node)) {
+      menuValueStore.set(node.path, nextValue);
+      closeMenuEditModal();
+      renderMenuWidget();
+      document.getElementById('menuScreen').focus();
+      return;
+    }
+
+    menuEditState.busy = true;
+    setMenuEditStatus('Saving...', 'muted');
+    syncMenuEditBusyState();
+
+    try {
+      const payload = await saveMenuNodeValue(node, nextValue);
+      menuValueStore.set(node.path, payload.value);
+    } catch (error) {
+      setMenuEditStatus('Write failed: ' + error.message, 'err');
+      menuEditState.busy = false;
+      syncMenuEditBusyState();
+      return;
+    }
+
     closeMenuEditModal();
     renderMenuWidget();
     document.getElementById('menuScreen').focus();
+    await refresh();
   }
 
   function openRtcModal() {
@@ -989,6 +1174,7 @@
     try {
       const r = await fetch('api/temp');
       const j = await r.json();
+      syncMenuCacheFromDashboard(j);
 
       lastRtcIsoLocal = j.device_time_iso_local || lastRtcIsoLocal;
 

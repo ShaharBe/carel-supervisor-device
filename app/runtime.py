@@ -144,6 +144,7 @@ class Cache:
     alarms_skipped_active_count: int = 0
     alarms_last_scan_utc: Optional[str] = None
     alarms_error: Optional[str] = None
+    menu_values: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 cache = Cache()
@@ -511,50 +512,23 @@ def write_device_rtc(value: datetime, current_raw_year: Optional[int]) -> None:
 
 
 def poll_registers_once() -> None:
-    """Read controller data blocks and update the shared cache."""
+    """Read live controller data blocks and update the shared cache."""
     try:
         with modbus_lock:
             modbus_connect_or_raise()
             temp_rr = read_holding_registers(address=TEMP_ADDR, count=1)
-            max_production_rr = read_holding_registers(address=MAX_PRODUCTION_ADDR, count=1)
-            sp_rr = read_holding_registers(address=SETPOINT_ADDR, count=1)
-            prop_band_rr = read_holding_registers(address=PROP_BAND_ADDR, count=1)
 
         if temp_rr.isError():
             raise RuntimeError(f"Modbus read error (temp): {temp_rr}")
-        if max_production_rr.isError():
-            raise RuntimeError(f"Modbus read error (max production): {max_production_rr}")
-        if sp_rr.isError():
-            raise RuntimeError(f"Modbus read error (setpoint): {sp_rr}")
-        if prop_band_rr.isError():
-            raise RuntimeError(f"Modbus read error (prop. band): {prop_band_rr}")
         if not temp_rr.registers:
             raise RuntimeError("Modbus read returned no temperature registers")
-        if not max_production_rr.registers:
-            raise RuntimeError("Modbus read returned no max production registers")
-        if not sp_rr.registers:
-            raise RuntimeError("Modbus read returned no setpoint registers")
-        if not prop_band_rr.registers:
-            raise RuntimeError("Modbus read returned no prop. band registers")
 
         temp_raw = int(temp_rr.registers[0])
         temp_c = temp_raw / TEMP_SCALE
-        max_production_raw = int(max_production_rr.registers[0])
-        max_production_pct = max_production_raw / MAX_PRODUCTION_SCALE
-        sp_raw = int(sp_rr.registers[0])
-        sp_c = sp_raw / SETPOINT_SCALE
-        prop_band_raw = int(prop_band_rr.registers[0])
-        prop_band_c = prop_band_raw / PROP_BAND_SCALE
 
         with cache_lock:
             cache.temp_raw = temp_raw
             cache.temp_c = temp_c
-            cache.max_production_raw = max_production_raw
-            cache.max_production_pct = max_production_pct
-            cache.last_setpoint_raw = sp_raw
-            cache.last_setpoint_c = sp_c
-            cache.prop_band_raw = prop_band_raw
-            cache.prop_band_c = prop_band_c
             cache.last_update_utc = now_iso()
             cache.last_error = None
         clear_runtime_error()
