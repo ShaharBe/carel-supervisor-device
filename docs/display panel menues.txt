@@ -1,0 +1,66 @@
+	Root
+1.		(Caption): ["Off By Keyboard", "Off By Remote"...] (I,136,R)
+2.		Set
+2.1.		Setpoint (A,19,R/W) (Celsius)
+2.2.		Humidifier (D,8,R/W) [Auto/Off] Note: Assume (D,81,R/W) == "1"
+2.3.		Max Prod. (A,14,R/W) [20...100] (Percent)
+2.4.		Prop. band (A,20,R/W) [2..19.9] (Celsius)
+3.		Program
+3.1.		User (TBD)
+3.2.		Installer
+3.2.1.			Regulation Type
+3.2.1.1.			Select Regulation (I,143,R/W)
+3.2.1.2.			(Caption) Probe or Signal type
+3.2.1.3.			Main(reg.): (I,144,R/W)
+3.2.1.4.			Limit: (I,145,R/W) Note: "Limit:" appears only if "Select Regulation" choice contains: "+ limit" 
+3.2.1.5.			Measure Units (A,10,R/W) Note: =50 for: C-kg/hr, =110 for: F-lb/h
+3.2.2.			Prob. Config
+3.2.2.1.			(Caption) Main prob config
+3.2.2.2.			Min value (A,2,R/W)
+3.2.2.3.			Max value (A,3,R/W)
+3.2.2.4.			Offset (A,4,R/W)
+3.2.2.5.			(Caption) Main prob config
+3.2.2.6.			Min value (A,7,R/W)
+3.2.2.7.			Max value (A,8,R/W)
+3.2.2.8.			Offset (A,9,R/W)
+3.2.3.			Operations Options (1/3)
+3.2.3.1.			Select data view on main mask ["Ampere", "Kg-lb/h", "Hours"...] (!! Not documented in modbus)
+3.2.3.2.			(Caption) Cylinder lifetime
+3.2.3.3.			Warning [yes,no] (D,47,R/W,"warnings for pre-exhaustion and complete exhaustion")
+3.2.3.4.			Lifetime limit [hours] (Modbus: (I,146,R/W),"maintenance time-out")
+3.2.3.5.			Alarm relay logic ??? ["N.O.", "N.C."] (Stub) (!!! not documented in modbus ???)
+3.2.3.6.			Pulsed alarm relay ??? [yes,no] (Stub) (!!! not documented in modbus ???)
+3.2.3.7.			(Caption) Next page
+3.2.4.			Operations Options (2/3)
+3.2.4.1.			Delay before power off at set point [sec] (Stub) ??? (!! not documented in modbus ??)
+3.2.4.2.			Dehum. control (D,45,R/W)
+3.2.4.3.			Dehum. offset (A,21,R/W)
+3.2.4.4.			Dehum. hyster (A,22,R/W)
+3.2.4.5.			Disable complete emptying for foam (Stub) ??? (!! not documented in modbus ??)
+3.2.4.6.			(Caption) Prev page
+3.2.5.			Drainage Options (1/2)
+3.2.5.1.			Drain if steam request drop (D,42,R/W) [yes,no]  "drain for strong demand reduction"
+3.2.5.2.			Power-off electrodes when draining (D,46,R/W) [yes,no] "dilution drain with contactor opened"
+3.2.5.3.			Drain after inactivity time (D,43,R/W) [yes,no] "long-inactivity drain"
+3.2.5.4.			Inactivity days [days] (I,148,R/W) "inactivity drain: time-out"
+3.2.5.5.			Next Page
+3.2.6.			Drainage Options (2/2)
+3.2.6.1.			Dilution drain time (I,152,R/W) [percent] "tuning of dilution duration"
+3.2.6.2.			Dilution drain frequency (I,151,R/W) [percent] "tuning of dilution frequency"
+3.2.6.3.			Cylinder flush (D,44,R/W) [yes,no] "total periodical flush"
+3.2.6.4.			Time interval (I,147,R/W) [hours] "periodical flush: period"
+3.2.6.5.			Prev Page
+3.2.7.			Water Conductivity (Stub)
+3.2.7.1.			Override conductivity reading [0=no, >0] (Stub)
+3.2.7.2.			Warning (0...1300) (Stub)
+3.2.7.3.			Alarm (0...1300) (Stub)
+3.2.8.			Supervisor
+3.3.		Maintenance
+3.3.1.			Manual procedure
+3.3.1.1.			Manual procedure [yes,no]
+3.3.1.2.			Power contactor [yes,no]
+3.3.1.3.			Fill valve [yes,no] 
+3.3.1.4.			Drain pump [yes,no] 
+3.3.1.5.			Alarm [yes,no]
+3.3.1.6.			Dehumidifier [yes,no]
+
