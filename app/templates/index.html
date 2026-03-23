@@ -215,6 +215,33 @@
     </div>
   </div>
 
+  <div id="menuEditModalBackdrop" class="modal-backdrop" aria-hidden="true">
+    <div class="modal menu-edit-modal" role="dialog" aria-modal="true" aria-labelledby="menuEditModalTitle">
+      <h3 id="menuEditModalTitle">Edit Menu Value</h3>
+      <div id="menuEditModalPath" class="muted"></div>
+      <div id="menuEditModalCurrent" class="muted"></div>
+
+      <div id="menuEditChoiceGroup" class="menu-edit-choices" hidden></div>
+
+      <div id="menuEditNumberField" class="field" hidden>
+        <label for="menuEditNumberInput">Value</label>
+        <input id="menuEditNumberInput" type="number" inputmode="decimal" />
+      </div>
+
+      <div id="menuEditSelectField" class="field" hidden>
+        <label for="menuEditSelectInput">Value</label>
+        <select id="menuEditSelectInput"></select>
+      </div>
+
+      <div class="modal-actions">
+        <button id="saveMenuEditBtn" type="button">Save</button>
+        <button id="cancelMenuEditBtn" type="button">Cancel</button>
+      </div>
+
+      <div id="menuEditModalStatus" class="modal-status muted"></div>
+    </div>
+  </div>
+
   <script id="displayMenuData" type="application/json">{{ DISPLAY_MENU|tojson }}</script>
   <script src="static/app.js"></script>
 </body>

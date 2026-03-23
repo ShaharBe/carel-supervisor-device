@@ -100,9 +100,33 @@
     .modal h3 { margin: 0 0 8px; }
     .modal .field { margin: 12px 0; }
     .modal .field label { display: block; width: auto; margin-bottom: 6px; font-weight: 600; }
-    .modal .field input { width: 100%; box-sizing: border-box; }
+    .modal .field input,
+    .modal .field select { width: 100%; box-sizing: border-box; }
     .modal-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
     .modal-status { min-height: 1.2em; margin-top: 10px; }
+    .menu-edit-modal { width: min(100%, 440px); }
+    .menu-edit-choices {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .menu-edit-choice {
+      min-height: 42px;
+      padding: 8px 12px;
+      border: 1px solid #b9c9b2;
+      border-radius: 10px;
+      background: #f8fbf5;
+      color: #33442c;
+      font-weight: 600;
+    }
+    .menu-edit-choice:hover { background: #f1f8eb; }
+    .menu-edit-choice.is-selected {
+      border-color: #597651;
+      background: #dfead4;
+      color: #213019;
+      box-shadow: inset 0 0 0 1px rgba(89, 118, 81, 0.18);
+    }
 
     /* Accordion styles */
     details { margin: 14px 0; }

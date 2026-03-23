@@ -157,6 +157,35 @@
                     "index": 143,
                     "access": "R/W"
                   },
+                  "editor": {
+                    "type": "enum",
+                    "options": [
+                      {
+                        "value": 0,
+                        "label": "on/off"
+                      },
+                      {
+                        "value": 1,
+                        "label": "slave 0-100%"
+                      },
+                      {
+                        "value": 2,
+                        "label": "slave 0-100% + limit probe"
+                      },
+                      {
+                        "value": 3,
+                        "label": "%rh control with external probe without limit probe"
+                      },
+                      {
+                        "value": 4,
+                        "label": "%rh control with external probe + limit probe"
+                      },
+                      {
+                        "value": 5,
+                        "label": "temperature control"
+                      }
+                    ]
+                  },
                   "range_or_options": null,
                   "note": null,
                   "is_caption": false,
@@ -189,6 +218,35 @@
                     "index": 144,
                     "access": "R/W"
                   },
+                  "editor": {
+                    "type": "enum",
+                    "options": [
+                      {
+                        "value": 0,
+                        "label": "0-1 v"
+                      },
+                      {
+                        "value": 1,
+                        "label": "0-10 v"
+                      },
+                      {
+                        "value": 2,
+                        "label": "2-10 v"
+                      },
+                      {
+                        "value": 3,
+                        "label": "0-20 ma"
+                      },
+                      {
+                        "value": 4,
+                        "label": "4-20 ma"
+                      },
+                      {
+                        "value": 5,
+                        "label": "ntc carel standard"
+                      }
+                    ]
+                  },
                   "range_or_options": null,
                   "note": null,
                   "is_caption": false,
@@ -206,6 +264,35 @@
                     "family": "I",
                     "index": 145,
                     "access": "R/W"
+                  },
+                  "editor": {
+                    "type": "enum",
+                    "options": [
+                      {
+                        "value": 0,
+                        "label": "0-1 V"
+                      },
+                      {
+                        "value": 1,
+                        "label": "0-10 V"
+                      },
+                      {
+                        "value": 2,
+                        "label": "2-10 V"
+                      },
+                      {
+                        "value": 3,
+                        "label": "0-20 mA"
+                      },
+                      {
+                        "value": 4,
+                        "label": "4-20 mA"
+                      },
+                      {
+                        "value": 5,
+                        "label": "NTC CAREL standard"
+                      }
+                    ]
                   },
                   "range_or_options": null,
                   "note": "\"Limit:\" appears only if \"Select Regulation\" choice contains: \"+ limit\"",

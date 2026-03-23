@@ -22,6 +22,13 @@
   let menuIndex = new Map();
   let menuCurrentPath = '';
   let menuSelectedIndex = 0;
+  const menuValueStore = new Map();
+  let menuEditState = {
+    open: false,
+    nodePath: null,
+    editor: null,
+    draftValue: null
+  };
 
   function browserDateTimeLocalValue() {
     const now = new Date();
@@ -126,6 +133,162 @@
     return labels.length > 0 ? labels.join(' > ') : 'Root';
   }
 
+  function parseChoiceTokens(text) {
+    if (!text) {
+      return [];
+    }
+
+    const separator = text.includes(',') ? ',' : (text.includes('/') ? '/' : null);
+    if (!separator) {
+      return [];
+    }
+
+    return text
+      .split(separator)
+      .map((token) => token.trim().replace(/^"+|"+$/g, ''))
+      .filter(Boolean);
+  }
+
+  function isNumericRangeHint(text) {
+    return /-?\d+(?:\.\d+)?\s*(?:\.{2,3})\s*-?\d+(?:\.\d+)?/.test(text || '');
+  }
+
+  function inferNumericEditorType(node) {
+    const family = node.register?.family;
+    if (family !== 'A' && family !== 'I') {
+      return null;
+    }
+
+    const hint = node.range_or_options || '';
+    const label = node.display_label || '';
+    if (/\d+\.\d+/.test(hint) || /\b(offset|band|setpoint|hyster)\b/i.test(label)) {
+      return 'float';
+    }
+
+    return 'integer';
+  }
+
+  function normalizeEditorOptions(options) {
+    return (options || []).map((option, index) => {
+      if (option && typeof option === 'object') {
+        return {
+          value: option.value ?? index,
+          label: option.label ?? String(option.value ?? index)
+        };
+      }
+
+      return {
+        value: index,
+        label: String(option)
+      };
+    });
+  }
+
+  function getLeafEditor(node) {
+    if (!node) {
+      return null;
+    }
+
+    if (node.editor) {
+      const explicitType = node.editor.type || 'enum';
+      return {
+        type: explicitType,
+        options: normalizeEditorOptions(node.editor.options),
+        currentValue: node.editor.current_value,
+        step: node.editor.step || (explicitType === 'float' ? 'any' : '1')
+      };
+    }
+
+    if (node.register?.family === 'D') {
+      const labels = parseChoiceTokens(node.range_or_options);
+      const optionLabels = labels.length >= 2 ? labels.slice(0, 2) : ['yes', 'no'];
+      return {
+        type: 'boolean',
+        options: [
+          { value: true, label: optionLabels[0] },
+          { value: false, label: optionLabels[1] }
+        ],
+        currentValue: undefined,
+        step: null
+      };
+    }
+
+    const parsedChoices = parseChoiceTokens(node.range_or_options);
+    if (parsedChoices.length >= 2 && !isNumericRangeHint(node.range_or_options)) {
+      return {
+        type: 'enum',
+        options: parsedChoices.map((label, index) => ({ value: index, label })),
+        currentValue: undefined,
+        step: null
+      };
+    }
+
+    const numericType = inferNumericEditorType(node);
+    if (!numericType) {
+      return null;
+    }
+
+    return {
+      type: numericType,
+      options: [],
+      currentValue: undefined,
+      step: numericType === 'float' ? 'any' : '1'
+    };
+  }
+
+  function isMenuNodeEditable(node) {
+    return !['menu', 'caption', 'page_link'].includes(node?.kind) && getLeafEditor(node) !== null;
+  }
+
+  function getDefaultNumericValue(node, editor) {
+    const match = (node.range_or_options || '').match(/-?\d+(?:\.\d+)?/);
+    if (match) {
+      return editor.type === 'float' ? Number.parseFloat(match[0]) : Number.parseInt(match[0], 10);
+    }
+
+    return 0;
+  }
+
+  function getCurrentMenuValue(node, editor) {
+    if (menuValueStore.has(node.path)) {
+      return menuValueStore.get(node.path);
+    }
+
+    if (editor.currentValue !== undefined) {
+      return editor.currentValue;
+    }
+
+    if (editor.type === 'boolean') {
+      return editor.options[0]?.value ?? true;
+    }
+
+    if (editor.type === 'enum') {
+      return editor.options[0]?.value ?? '';
+    }
+
+    return getDefaultNumericValue(node, editor);
+  }
+
+  function formatMenuValue(node, value, editorOverride) {
+    const editor = editorOverride || getLeafEditor(node);
+    if (!editor) {
+      return 'Unavailable';
+    }
+
+    if (value === null || value === undefined || value === '') {
+      return 'Not set';
+    }
+
+    if (editor.type === 'boolean' || editor.type === 'enum') {
+      const match = editor.options.find((option) => String(option.value) === String(value));
+      if (match) {
+        return match.label;
+      }
+    }
+
+    return String(value);
+  }
+
   function menuDetailMeta(node) {
     const fragments = [];
     if (node.kind === 'menu') {
@@ -186,10 +349,20 @@
         node.page_direction === 'prev'
           ? 'Press Enter to jump to the previous sibling page.'
           : 'Press Enter to jump to the next sibling page.';
+    } else if (isMenuNodeEditable(node)) {
+      guidance.textContent = 'Double-click to edit this value locally.';
     } else {
       guidance.textContent = 'This prototype only sketches navigation, so leaf actions are not wired yet.';
     }
     detail.appendChild(guidance);
+
+    if (isMenuNodeEditable(node)) {
+      const currentValue = document.createElement('div');
+      currentValue.className = 'menu-detail-note';
+      currentValue.textContent =
+        'Current UI value: ' + formatMenuValue(node, getCurrentMenuValue(node, getLeafEditor(node)));
+      detail.appendChild(currentValue);
+    }
 
     if (node.note) {
       const note = document.createElement('div');
@@ -308,6 +481,10 @@
       });
       line.addEventListener('dblclick', () => {
         menuSelectedIndex = actualIndex;
+        if (isMenuNodeEditable(child)) {
+          openMenuEditModal(child);
+          return;
+        }
         openSelectedMenuItem();
       });
 
@@ -404,6 +581,156 @@
 
   function goHomeInMenu() {
     navigateToMenu('');
+  }
+
+  function isChoiceButtonEditor(editor) {
+    return editor.type === 'boolean' || (editor.type === 'enum' && editor.options.length <= 2);
+  }
+
+  function currentMenuEditNode() {
+    return menuEditState.nodePath ? getMenuNode(menuEditState.nodePath) : null;
+  }
+
+  function closeMenuEditModal() {
+    menuEditState = {
+      open: false,
+      nodePath: null,
+      editor: null,
+      draftValue: null
+    };
+    document.getElementById('menuEditModalBackdrop').classList.remove('open');
+    document.getElementById('menuEditModalBackdrop').setAttribute('aria-hidden', 'true');
+  }
+
+  function renderMenuEditChoices() {
+    const group = document.getElementById('menuEditChoiceGroup');
+    group.replaceChildren();
+
+    const editor = menuEditState.editor;
+    if (!editor) {
+      return;
+    }
+
+    editor.options.forEach((option) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className =
+        'menu-edit-choice' + (String(option.value) === String(menuEditState.draftValue) ? ' is-selected' : '');
+      button.textContent = option.label;
+      button.addEventListener('click', () => {
+        menuEditState.draftValue = option.value;
+        renderMenuEditChoices();
+      });
+      group.appendChild(button);
+    });
+  }
+
+  function openMenuEditModal(node) {
+    const editor = getLeafEditor(node);
+    if (!editor) {
+      return;
+    }
+
+    menuEditState = {
+      open: true,
+      nodePath: node.path,
+      editor,
+      draftValue: getCurrentMenuValue(node, editor)
+    };
+
+    document.getElementById('menuEditModalTitle').textContent = 'Edit ' + (node.display_label || node.title);
+    document.getElementById('menuEditModalPath').textContent = buildMenuBreadcrumb(node);
+    document.getElementById('menuEditModalCurrent').textContent =
+      'Current UI value: ' + formatMenuValue(node, menuEditState.draftValue, editor);
+    document.getElementById('menuEditModalStatus').textContent =
+      'UI-only edit. Save stores the value locally in this browser session.';
+    document.getElementById('menuEditModalStatus').className = 'modal-status muted';
+
+    const choiceGroup = document.getElementById('menuEditChoiceGroup');
+    const numberField = document.getElementById('menuEditNumberField');
+    const selectField = document.getElementById('menuEditSelectField');
+    const numberInput = document.getElementById('menuEditNumberInput');
+    const selectInput = document.getElementById('menuEditSelectInput');
+
+    choiceGroup.hidden = true;
+    numberField.hidden = true;
+    selectField.hidden = true;
+    choiceGroup.replaceChildren();
+    selectInput.replaceChildren();
+
+    if (isChoiceButtonEditor(editor)) {
+      choiceGroup.hidden = false;
+      renderMenuEditChoices();
+    } else if (editor.type === 'enum') {
+      selectField.hidden = false;
+      editor.options.forEach((option) => {
+        const element = document.createElement('option');
+        element.value = String(option.value);
+        element.textContent = option.label;
+        if (String(option.value) === String(menuEditState.draftValue)) {
+          element.selected = true;
+        }
+        selectInput.appendChild(element);
+      });
+    } else {
+      numberField.hidden = false;
+      numberInput.step = editor.step || (editor.type === 'float' ? 'any' : '1');
+      numberInput.value = String(menuEditState.draftValue);
+    }
+
+    const backdrop = document.getElementById('menuEditModalBackdrop');
+    backdrop.classList.add('open');
+    backdrop.setAttribute('aria-hidden', 'false');
+
+    if (choiceGroup.hidden === false) {
+      const firstChoice = choiceGroup.querySelector('button');
+      firstChoice?.focus();
+    } else if (selectField.hidden === false) {
+      selectInput.focus();
+    } else {
+      numberInput.focus();
+      numberInput.select();
+    }
+  }
+
+  function saveMenuEdit() {
+    const node = currentMenuEditNode();
+    const editor = menuEditState.editor;
+    if (!node || !editor) {
+      return;
+    }
+
+    const status = document.getElementById('menuEditModalStatus');
+    let nextValue = menuEditState.draftValue;
+
+    if (editor.type === 'enum' && !isChoiceButtonEditor(editor)) {
+      const raw = document.getElementById('menuEditSelectInput').value;
+      const selected = editor.options.find((option) => String(option.value) === raw);
+      nextValue = selected ? selected.value : editor.options[0]?.value;
+    } else if (editor.type === 'integer' || editor.type === 'float') {
+      const raw = document.getElementById('menuEditNumberInput').value.trim();
+      if (!raw) {
+        status.textContent = 'Enter a value first.';
+        status.className = 'modal-status err';
+        return;
+      }
+
+      nextValue = editor.type === 'float' ? Number.parseFloat(raw) : Number.parseInt(raw, 10);
+      if (!Number.isFinite(nextValue)) {
+        status.textContent = 'Enter a valid number.';
+        status.className = 'modal-status err';
+        return;
+      }
+    } else if (nextValue === null || nextValue === undefined) {
+      status.textContent = 'Choose a value first.';
+      status.className = 'modal-status err';
+      return;
+    }
+
+    menuValueStore.set(node.path, nextValue);
+    closeMenuEditModal();
+    renderMenuWidget();
+    document.getElementById('menuScreen').focus();
   }
 
   function openRtcModal() {
@@ -1000,6 +1327,11 @@
       closePropBandModal();
     }
   });
+  document.getElementById('menuEditModalBackdrop').addEventListener('click', (event) => {
+    if (event.target.id === 'menuEditModalBackdrop') {
+      closeMenuEditModal();
+    }
+  });
   document.getElementById('humidifierToggleBtn').addEventListener('click', toggleHumidifier);
   document.getElementById('drainCyl1Btn').addEventListener('click', async () => {
     const btn = document.getElementById('drainCyl1Btn');
@@ -1020,6 +1352,36 @@
   document.getElementById('menuEnterBtn').addEventListener('click', openSelectedMenuItem);
   document.getElementById('menuBackBtn').addEventListener('click', goBackInMenu);
   document.getElementById('menuHomeBtn').addEventListener('click', goHomeInMenu);
+  document.getElementById('saveMenuEditBtn').addEventListener('click', saveMenuEdit);
+  document.getElementById('cancelMenuEditBtn').addEventListener('click', closeMenuEditModal);
+  document.getElementById('menuEditSelectInput').addEventListener('change', (event) => {
+    const editor = menuEditState.editor;
+    if (!editor) {
+      return;
+    }
+    const selected = editor.options.find((option) => String(option.value) === event.target.value);
+    if (selected) {
+      menuEditState.draftValue = selected.value;
+    }
+  });
+  document.getElementById('menuEditNumberInput').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      saveMenuEdit();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      closeMenuEditModal();
+    }
+  });
+  document.getElementById('menuEditSelectInput').addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      saveMenuEdit();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      closeMenuEditModal();
+    }
+  });
   document.getElementById('menuScreen').addEventListener('keydown', (event) => {
     if (event.key === 'ArrowUp') {
       event.preventDefault();
