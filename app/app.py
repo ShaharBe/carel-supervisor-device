@@ -365,7 +365,7 @@ def read_menu_value_from_controller(node: dict[str, Any]) -> dict[str, Any]:
       value = raw_value
     else:
       # address = qmm_to_modbus_addr(index)
-      address = index if family == "I" else qmm_to_modbus_addr(index)
+      address = index
       rr = read_holding_registers(address=address, count=1)
       if rr.isError():
         raise RuntimeError(f"Modbus read error (register {index}): {rr}")
@@ -458,7 +458,7 @@ def write_menu_value_to_controller(node: dict[str, Any], incoming_value: Any) ->
         raise RuntimeError(f"Modbus write error (coil {index}): {wr}")
     else:
       #wr = write_register(address=qmm_to_modbus_addr(index), value=int(raw_value))
-      wr = write_register(address=(index if family == "I" else qmm_to_modbus_addr(index)), value=int(raw_value))
+      wr = write_register(address=index, value=int(raw_value))
       if wr.isError():
         raise RuntimeError(f"Modbus write error (register {index}): {wr}")
 
