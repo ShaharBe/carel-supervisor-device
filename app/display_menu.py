@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 from pathlib import Path
@@ -29,6 +30,9 @@ def _candidate_menu_paths() -> list[Path]:
     if configured_path:
         candidates.append(Path(configured_path))
 
+    bundled_json_path = Path(__file__).resolve().parent / "data" / "display_menu.json"
+    candidates.append(bundled_json_path)
+
     repo_docs_path = Path(__file__).resolve().parents[1] / "docs" / "display panel menues.txt"
     candidates.append(repo_docs_path)
     candidates.append(Path(r"C:\Freelance Projects\CarelSupervisor\docs\display panel menues.txt"))
@@ -50,6 +54,15 @@ def resolve_menu_definition_path() -> Path | None:
         if path.is_file():
             return path
     return None
+
+
+def _load_menu_root_from_json(path: Path) -> dict[str, Any]:
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(loaded, dict):
+        raise ValueError("menu JSON root must be an object")
+    if "children" not in loaded:
+        raise ValueError("menu JSON root must include 'children'")
+    return loaded
 
 
 def _split_note(raw_text: str) -> tuple[str, str | None]:
@@ -195,12 +208,16 @@ def load_display_menu() -> dict[str, Any]:
         }
 
     try:
-        menu_text = source_path.read_text(encoding="utf-8-sig")
+        if source_path.suffix.lower() == ".json":
+            root = _load_menu_root_from_json(source_path)
+        else:
+            menu_text = source_path.read_text(encoding="utf-8-sig")
+            root = parse_menu_definition(menu_text)
         return {
             "ok": True,
             "error": None,
             "source_path": str(source_path),
-            "root": parse_menu_definition(menu_text),
+            "root": root,
         }
     except Exception as exc:
         return {

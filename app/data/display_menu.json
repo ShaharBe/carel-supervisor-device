@@ -1,0 +1,1029 @@
+{
+  "path": "",
+  "title": "Root",
+  "display_label": "Root",
+  "raw_text": "Root",
+  "kind": "root",
+  "children": [
+    {
+      "path": "1",
+      "title": "Status Caption",
+      "display_label": "Status Caption",
+      "raw_text": "(Caption): [\"Off By Keyboard\", \"Off By Remote\"...] (I,136,R)",
+      "kind": "caption",
+      "children": [],
+      "register": {
+        "family": "I",
+        "index": 136,
+        "access": "R"
+      },
+      "range_or_options": "\"Off By Keyboard\", \"Off By Remote\"...",
+      "note": null,
+      "is_caption": true,
+      "is_stub": false,
+      "page_direction": null
+    },
+    {
+      "path": "2",
+      "title": "Set",
+      "display_label": "Set",
+      "raw_text": "Set",
+      "kind": "menu",
+      "children": [
+        {
+          "path": "2.1",
+          "title": "Setpoint",
+          "display_label": "Setpoint",
+          "raw_text": "Setpoint (A,19,R/W) (Celsius)",
+          "kind": "leaf",
+          "children": [],
+          "register": {
+            "family": "A",
+            "index": 19,
+            "access": "R/W"
+          },
+          "range_or_options": null,
+          "note": null,
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        },
+        {
+          "path": "2.2",
+          "title": "Humidifier",
+          "display_label": "Humidifier",
+          "raw_text": "Humidifier (D,8,R/W) [Auto/Off] Note: Assume (D,81,R/W) == \"1\"",
+          "kind": "leaf",
+          "children": [],
+          "register": {
+            "family": "D",
+            "index": 8,
+            "access": "R/W"
+          },
+          "range_or_options": "Auto/Off",
+          "note": "Assume (D,81,R/W) == \"1\"",
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        },
+        {
+          "path": "2.3",
+          "title": "Max Prod.",
+          "display_label": "Max Prod.",
+          "raw_text": "Max Prod. (A,14,R/W) [20...100] (Percent)",
+          "kind": "leaf",
+          "children": [],
+          "register": {
+            "family": "A",
+            "index": 14,
+            "access": "R/W"
+          },
+          "range_or_options": "20...100",
+          "note": null,
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        },
+        {
+          "path": "2.4",
+          "title": "Prop. band",
+          "display_label": "Prop. band",
+          "raw_text": "Prop. band (A,20,R/W) [2..19.9] (Celsius)",
+          "kind": "leaf",
+          "children": [],
+          "register": {
+            "family": "A",
+            "index": 20,
+            "access": "R/W"
+          },
+          "range_or_options": "2..19.9",
+          "note": null,
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        }
+      ],
+      "register": null,
+      "range_or_options": null,
+      "note": null,
+      "is_caption": false,
+      "is_stub": false,
+      "page_direction": null
+    },
+    {
+      "path": "3",
+      "title": "Program",
+      "display_label": "Program",
+      "raw_text": "Program",
+      "kind": "menu",
+      "children": [
+        {
+          "path": "3.1",
+          "title": "User (TBD)",
+          "display_label": "User (TBD)",
+          "raw_text": "User (TBD)",
+          "kind": "stub",
+          "children": [],
+          "register": null,
+          "range_or_options": null,
+          "note": null,
+          "is_caption": false,
+          "is_stub": true,
+          "page_direction": null
+        },
+        {
+          "path": "3.2",
+          "title": "Installer",
+          "display_label": "Installer",
+          "raw_text": "Installer",
+          "kind": "menu",
+          "children": [
+            {
+              "path": "3.2.1",
+              "title": "Regulation Type",
+              "display_label": "Regulation Type",
+              "raw_text": "Regulation Type",
+              "kind": "menu",
+              "children": [
+                {
+                  "path": "3.2.1.1",
+                  "title": "Select Regulation",
+                  "display_label": "Select Regulation",
+                  "raw_text": "Select Regulation (I,143,R/W)",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "I",
+                    "index": 143,
+                    "access": "R/W"
+                  },
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.1.2",
+                  "title": "Probe or Signal type",
+                  "display_label": "Probe or Signal type",
+                  "raw_text": "(Caption) Probe or Signal type",
+                  "kind": "caption",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": true,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.1.3",
+                  "title": "Main(reg.)",
+                  "display_label": "Main(reg.)",
+                  "raw_text": "Main(reg.): (I,144,R/W)",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "I",
+                    "index": 144,
+                    "access": "R/W"
+                  },
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.1.4",
+                  "title": "Limit",
+                  "display_label": "Limit",
+                  "raw_text": "Limit: (I,145,R/W) Note: \"Limit:\" appears only if \"Select Regulation\" choice contains: \"+ limit\"",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "I",
+                    "index": 145,
+                    "access": "R/W"
+                  },
+                  "range_or_options": null,
+                  "note": "\"Limit:\" appears only if \"Select Regulation\" choice contains: \"+ limit\"",
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.1.5",
+                  "title": "Measure Units",
+                  "display_label": "Measure Units",
+                  "raw_text": "Measure Units (A,10,R/W) Note: =50 for: C-kg/hr, =110 for: F-lb/h",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "A",
+                    "index": 10,
+                    "access": "R/W"
+                  },
+                  "range_or_options": null,
+                  "note": "=50 for: C-kg/hr, =110 for: F-lb/h",
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                }
+              ],
+              "register": null,
+              "range_or_options": null,
+              "note": null,
+              "is_caption": false,
+              "is_stub": false,
+              "page_direction": null
+            },
+            {
+              "path": "3.2.2",
+              "title": "Prob. Config",
+              "display_label": "Prob. Config",
+              "raw_text": "Prob. Config",
+              "kind": "menu",
+              "children": [
+                {
+                  "path": "3.2.2.1",
+                  "title": "Main prob config",
+                  "display_label": "Main prob config",
+                  "raw_text": "(Caption) Main prob config",
+                  "kind": "caption",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": true,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.2.2",
+                  "title": "Min value",
+                  "display_label": "Min value",
+                  "raw_text": "Min value (A,2,R/W)",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "A",
+                    "index": 2,
+                    "access": "R/W"
+                  },
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.2.3",
+                  "title": "Max value",
+                  "display_label": "Max value",
+                  "raw_text": "Max value (A,3,R/W)",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "A",
+                    "index": 3,
+                    "access": "R/W"
+                  },
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.2.4",
+                  "title": "Offset",
+                  "display_label": "Offset",
+                  "raw_text": "Offset (A,4,R/W)",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "A",
+                    "index": 4,
+                    "access": "R/W"
+                  },
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.2.5",
+                  "title": "Main prob config",
+                  "display_label": "Main prob config",
+                  "raw_text": "(Caption) Main prob config",
+                  "kind": "caption",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": true,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.2.6",
+                  "title": "Min value",
+                  "display_label": "Min value",
+                  "raw_text": "Min value (A,7,R/W)",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "A",
+                    "index": 7,
+                    "access": "R/W"
+                  },
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.2.7",
+                  "title": "Max value",
+                  "display_label": "Max value",
+                  "raw_text": "Max value (A,8,R/W)",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "A",
+                    "index": 8,
+                    "access": "R/W"
+                  },
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.2.8",
+                  "title": "Offset",
+                  "display_label": "Offset",
+                  "raw_text": "Offset (A,9,R/W)",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "A",
+                    "index": 9,
+                    "access": "R/W"
+                  },
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                }
+              ],
+              "register": null,
+              "range_or_options": null,
+              "note": null,
+              "is_caption": false,
+              "is_stub": false,
+              "page_direction": null
+            },
+            {
+              "path": "3.2.3",
+              "title": "Operations Options (1/3)",
+              "display_label": "Operations Options (1/3)",
+              "raw_text": "Operations Options (1/3)",
+              "kind": "menu",
+              "children": [
+                {
+                  "path": "3.2.3.1",
+                  "title": "Select data view on main mask",
+                  "display_label": "Select data view on main mask",
+                  "raw_text": "Select data view on main mask [\"Ampere\", \"Kg-lb/h\", \"Hours\"...] (!! Not documented in modbus)",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": "\"Ampere\", \"Kg-lb/h\", \"Hours\"...",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.3.2",
+                  "title": "Cylinder lifetime",
+                  "display_label": "Cylinder lifetime",
+                  "raw_text": "(Caption) Cylinder lifetime",
+                  "kind": "caption",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": true,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.3.3",
+                  "title": "Warning",
+                  "display_label": "Warning",
+                  "raw_text": "Warning [yes,no] (D,47,R/W,\"warnings for pre-exhaustion and complete exhaustion\")",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "D",
+                    "index": 47,
+                    "access": "R/W"
+                  },
+                  "range_or_options": "yes,no",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.3.4",
+                  "title": "Lifetime limit",
+                  "display_label": "Lifetime limit",
+                  "raw_text": "Lifetime limit [hours] (Modbus: (I,146,R/W),\"maintenance time-out\")",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "I",
+                    "index": 146,
+                    "access": "R/W"
+                  },
+                  "range_or_options": "hours",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.3.5",
+                  "title": "Alarm relay logic",
+                  "display_label": "Alarm relay logic",
+                  "raw_text": "Alarm relay logic ??? [\"N.O.\", \"N.C.\"] (Stub) (!!! not documented in modbus ???)",
+                  "kind": "stub",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": "\"N.O.\", \"N.C.\"",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": true,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.3.6",
+                  "title": "Pulsed alarm relay",
+                  "display_label": "Pulsed alarm relay",
+                  "raw_text": "Pulsed alarm relay ??? [yes,no] (Stub) (!!! not documented in modbus ???)",
+                  "kind": "stub",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": "yes,no",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": true,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.3.7",
+                  "title": "Next page",
+                  "display_label": "Next page",
+                  "raw_text": "(Caption) Next page",
+                  "kind": "page_link",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": true,
+                  "is_stub": false,
+                  "page_direction": "next"
+                }
+              ],
+              "register": null,
+              "range_or_options": null,
+              "note": null,
+              "is_caption": false,
+              "is_stub": false,
+              "page_direction": null
+            },
+            {
+              "path": "3.2.4",
+              "title": "Operations Options (2/3)",
+              "display_label": "Operations Options (2/3)",
+              "raw_text": "Operations Options (2/3)",
+              "kind": "menu",
+              "children": [
+                {
+                  "path": "3.2.4.1",
+                  "title": "Delay before power off at set point",
+                  "display_label": "Delay before power off at set point",
+                  "raw_text": "Delay before power off at set point [sec] (Stub) ??? (!! not documented in modbus ??)",
+                  "kind": "stub",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": "sec",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": true,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.4.2",
+                  "title": "Dehum. control",
+                  "display_label": "Dehum. control",
+                  "raw_text": "Dehum. control (D,45,R/W)",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "D",
+                    "index": 45,
+                    "access": "R/W"
+                  },
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.4.3",
+                  "title": "Dehum. offset",
+                  "display_label": "Dehum. offset",
+                  "raw_text": "Dehum. offset (A,21,R/W)",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "A",
+                    "index": 21,
+                    "access": "R/W"
+                  },
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.4.4",
+                  "title": "Dehum. hyster",
+                  "display_label": "Dehum. hyster",
+                  "raw_text": "Dehum. hyster (A,22,R/W)",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "A",
+                    "index": 22,
+                    "access": "R/W"
+                  },
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.4.5",
+                  "title": "Disable complete emptying for foam",
+                  "display_label": "Disable complete emptying for foam",
+                  "raw_text": "Disable complete emptying for foam (Stub) ??? (!! not documented in modbus ??)",
+                  "kind": "stub",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": true,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.4.6",
+                  "title": "Prev page",
+                  "display_label": "Prev page",
+                  "raw_text": "(Caption) Prev page",
+                  "kind": "page_link",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": true,
+                  "is_stub": false,
+                  "page_direction": "prev"
+                }
+              ],
+              "register": null,
+              "range_or_options": null,
+              "note": null,
+              "is_caption": false,
+              "is_stub": false,
+              "page_direction": null
+            },
+            {
+              "path": "3.2.5",
+              "title": "Drainage Options (1/2)",
+              "display_label": "Drainage Options (1/2)",
+              "raw_text": "Drainage Options (1/2)",
+              "kind": "menu",
+              "children": [
+                {
+                  "path": "3.2.5.1",
+                  "title": "Drain if steam request drop",
+                  "display_label": "Drain if steam request drop",
+                  "raw_text": "Drain if steam request drop (D,42,R/W) [yes,no]  \"drain for strong demand reduction\"",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "D",
+                    "index": 42,
+                    "access": "R/W"
+                  },
+                  "range_or_options": "yes,no",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.5.2",
+                  "title": "Power-off electrodes when draining",
+                  "display_label": "Power-off electrodes when draining",
+                  "raw_text": "Power-off electrodes when draining (D,46,R/W) [yes,no] \"dilution drain with contactor opened\"",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "D",
+                    "index": 46,
+                    "access": "R/W"
+                  },
+                  "range_or_options": "yes,no",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.5.3",
+                  "title": "Drain after inactivity time",
+                  "display_label": "Drain after inactivity time",
+                  "raw_text": "Drain after inactivity time (D,43,R/W) [yes,no] \"long-inactivity drain\"",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "D",
+                    "index": 43,
+                    "access": "R/W"
+                  },
+                  "range_or_options": "yes,no",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.5.4",
+                  "title": "Inactivity days",
+                  "display_label": "Inactivity days",
+                  "raw_text": "Inactivity days [days] (I,148,R/W) \"inactivity drain: time-out\"",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "I",
+                    "index": 148,
+                    "access": "R/W"
+                  },
+                  "range_or_options": "days",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.5.5",
+                  "title": "Next Page",
+                  "display_label": "Next Page",
+                  "raw_text": "Next Page",
+                  "kind": "page_link",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": "next"
+                }
+              ],
+              "register": null,
+              "range_or_options": null,
+              "note": null,
+              "is_caption": false,
+              "is_stub": false,
+              "page_direction": null
+            },
+            {
+              "path": "3.2.6",
+              "title": "Drainage Options (2/2)",
+              "display_label": "Drainage Options (2/2)",
+              "raw_text": "Drainage Options (2/2)",
+              "kind": "menu",
+              "children": [
+                {
+                  "path": "3.2.6.1",
+                  "title": "Dilution drain time",
+                  "display_label": "Dilution drain time",
+                  "raw_text": "Dilution drain time (I,152,R/W) [percent] \"tuning of dilution duration\"",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "I",
+                    "index": 152,
+                    "access": "R/W"
+                  },
+                  "range_or_options": "percent",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.6.2",
+                  "title": "Dilution drain frequency",
+                  "display_label": "Dilution drain frequency",
+                  "raw_text": "Dilution drain frequency (I,151,R/W) [percent] \"tuning of dilution frequency\"",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "I",
+                    "index": 151,
+                    "access": "R/W"
+                  },
+                  "range_or_options": "percent",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.6.3",
+                  "title": "Cylinder flush",
+                  "display_label": "Cylinder flush",
+                  "raw_text": "Cylinder flush (D,44,R/W) [yes,no] \"total periodical flush\"",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "D",
+                    "index": 44,
+                    "access": "R/W"
+                  },
+                  "range_or_options": "yes,no",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.6.4",
+                  "title": "Time interval",
+                  "display_label": "Time interval",
+                  "raw_text": "Time interval (I,147,R/W) [hours] \"periodical flush: period\"",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "I",
+                    "index": 147,
+                    "access": "R/W"
+                  },
+                  "range_or_options": "hours",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.6.5",
+                  "title": "Prev Page",
+                  "display_label": "Prev Page",
+                  "raw_text": "Prev Page",
+                  "kind": "page_link",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": "prev"
+                }
+              ],
+              "register": null,
+              "range_or_options": null,
+              "note": null,
+              "is_caption": false,
+              "is_stub": false,
+              "page_direction": null
+            },
+            {
+              "path": "3.2.7",
+              "title": "Water Conductivity",
+              "display_label": "Water Conductivity",
+              "raw_text": "Water Conductivity (Stub)",
+              "kind": "menu",
+              "children": [
+                {
+                  "path": "3.2.7.1",
+                  "title": "Override conductivity reading",
+                  "display_label": "Override conductivity reading",
+                  "raw_text": "Override conductivity reading [0=no, >0] (Stub)",
+                  "kind": "stub",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": "0=no, >0",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": true,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.7.2",
+                  "title": "Warning (0...1300)",
+                  "display_label": "Warning (0...1300)",
+                  "raw_text": "Warning (0...1300) (Stub)",
+                  "kind": "stub",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": true,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.7.3",
+                  "title": "Alarm (0...1300)",
+                  "display_label": "Alarm (0...1300)",
+                  "raw_text": "Alarm (0...1300) (Stub)",
+                  "kind": "stub",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": null,
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": true,
+                  "page_direction": null
+                }
+              ],
+              "register": null,
+              "range_or_options": null,
+              "note": null,
+              "is_caption": false,
+              "is_stub": true,
+              "page_direction": null
+            },
+            {
+              "path": "3.2.8",
+              "title": "Supervisor",
+              "display_label": "Supervisor",
+              "raw_text": "Supervisor",
+              "kind": "leaf",
+              "children": [],
+              "register": null,
+              "range_or_options": null,
+              "note": null,
+              "is_caption": false,
+              "is_stub": false,
+              "page_direction": null
+            }
+          ],
+          "register": null,
+          "range_or_options": null,
+          "note": null,
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        },
+        {
+          "path": "3.3",
+          "title": "Maintenance",
+          "display_label": "Maintenance",
+          "raw_text": "Maintenance",
+          "kind": "menu",
+          "children": [
+            {
+              "path": "3.3.1",
+              "title": "Manual procedure",
+              "display_label": "Manual procedure",
+              "raw_text": "Manual procedure",
+              "kind": "menu",
+              "children": [
+                {
+                  "path": "3.3.1.1",
+                  "title": "Manual procedure",
+                  "display_label": "Manual procedure",
+                  "raw_text": "Manual procedure [yes,no]",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": "yes,no",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.3.1.2",
+                  "title": "Power contactor",
+                  "display_label": "Power contactor",
+                  "raw_text": "Power contactor [yes,no]",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": "yes,no",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.3.1.3",
+                  "title": "Fill valve",
+                  "display_label": "Fill valve",
+                  "raw_text": "Fill valve [yes,no]",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": "yes,no",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.3.1.4",
+                  "title": "Drain pump",
+                  "display_label": "Drain pump",
+                  "raw_text": "Drain pump [yes,no]",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": "yes,no",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.3.1.5",
+                  "title": "Alarm",
+                  "display_label": "Alarm",
+                  "raw_text": "Alarm [yes,no]",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": "yes,no",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.3.1.6",
+                  "title": "Dehumidifier",
+                  "display_label": "Dehumidifier",
+                  "raw_text": "Dehumidifier [yes,no]",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": null,
+                  "range_or_options": "yes,no",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                }
+              ],
+              "register": null,
+              "range_or_options": null,
+              "note": null,
+              "is_caption": false,
+              "is_stub": false,
+              "page_direction": null
+            }
+          ],
+          "register": null,
+          "range_or_options": null,
+          "note": null,
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        }
+      ],
+      "register": null,
+      "range_or_options": null,
+      "note": null,
+      "is_caption": false,
+      "is_stub": false,
+      "page_direction": null
+    }
+  ]
+}
