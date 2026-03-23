@@ -180,6 +180,9 @@
     .alarm-description { margin-top: 0; font-weight: 600; color: #2a2117; line-height: 1.35; }
     .alarm-hint { margin-top: 8px; min-height: 1.2em; }
     .menu-widget {
+      --menu-font-size: 1.45rem;
+      --menu-text-scale-x: 0.88;
+      --menu-letter-spacing: -0.015em;
       margin: 16px 0;
       padding: 12px 13px;
       border-radius: 14px;
@@ -204,6 +207,38 @@
       min-height: 30px;
       white-space: nowrap;
     }
+    .menu-display-tools {
+      display: flex;
+      align-items: center;
+      gap: 10px 14px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.48);
+      border: 1px solid rgba(157, 181, 148, 0.52);
+    }
+    .menu-display-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: auto;
+      margin: 0;
+      font-size: 0.92rem;
+      font-weight: 600;
+      color: #41523a;
+    }
+    .menu-display-control input[type="range"] {
+      width: 110px;
+      padding: 0;
+    }
+    .menu-display-value {
+      min-width: 3.8ch;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      color: #2b3b24;
+    }
+    .menu-display-reset { margin-left: auto; }
     .lcd-shell {
       padding: 10px;
       border-radius: 16px;
@@ -223,7 +258,7 @@
       display: grid;
       gap: 3px;
       font-family: Consolas, "Courier New", monospace;
-      font-size: 1.45rem;
+      font-size: var(--menu-font-size);
       line-height: 1.05;
       color: #22301b;
       outline: none;
@@ -260,9 +295,14 @@
       box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
     }
     .menu-line-label {
+      display: block;
+      width: calc(100% / var(--menu-text-scale-x));
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      letter-spacing: var(--menu-letter-spacing);
+      transform: scaleX(var(--menu-text-scale-x));
+      transform-origin: left center;
     }
     .menu-line-hint {
       opacity: 0.78;
@@ -283,6 +323,7 @@
     .menu-line-caption .menu-line-label {
       text-align: center;
       font-weight: 700;
+      transform-origin: center center;
     }
     .menu-line-stub:not(.is-active),
     .menu-line-caption:not(.is-active) {
@@ -372,7 +413,20 @@
       .compact-action-row label { width: auto; margin-bottom: 0; }
       .menu-screen {
         height: 304px;
-        font-size: 1.3rem;
+        --menu-font-size: 1.3rem;
+      }
+      .menu-display-tools { align-items: stretch; }
+      .menu-display-control {
+        width: 100%;
+        justify-content: space-between;
+      }
+      .menu-display-control input[type="range"] {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+      .menu-display-reset {
+        width: 100%;
+        margin-left: 0;
       }
       .menu-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .menu-nav .small-btn { width: 100%; }

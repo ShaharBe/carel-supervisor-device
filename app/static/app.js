@@ -29,11 +29,96 @@
     editor: null,
     draftValue: null
   };
+  const menuDisplayStorageKey = 'carel-menu-display-settings';
+  const defaultMenuDisplaySettings = {
+    sizePercent: 100,
+    widthPercent: 88
+  };
+  let menuDisplaySettings = { ...defaultMenuDisplaySettings };
 
   function browserDateTimeLocalValue() {
     const now = new Date();
     const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
     return local.toISOString().slice(0, 16);
+  }
+
+  function clampNumber(value, min, max, fallback) {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      return fallback;
+    }
+    return Math.min(max, Math.max(min, numericValue));
+  }
+
+  function sanitizeMenuDisplaySettings(rawSettings) {
+    return {
+      sizePercent: clampNumber(rawSettings?.sizePercent, 80, 180, defaultMenuDisplaySettings.sizePercent),
+      widthPercent: clampNumber(rawSettings?.widthPercent, 70, 110, defaultMenuDisplaySettings.widthPercent)
+    };
+  }
+
+  function loadMenuDisplaySettings() {
+    try {
+      const saved = window.localStorage.getItem(menuDisplayStorageKey);
+      if (!saved) {
+        return { ...defaultMenuDisplaySettings };
+      }
+      return sanitizeMenuDisplaySettings(JSON.parse(saved));
+    } catch (e) {
+      return { ...defaultMenuDisplaySettings };
+    }
+  }
+
+  function persistMenuDisplaySettings() {
+    try {
+      window.localStorage.setItem(menuDisplayStorageKey, JSON.stringify(menuDisplaySettings));
+    } catch (e) {
+      // Ignore storage failures; the controls can still work for the current page session.
+    }
+  }
+
+  function getMenuBaseFontRem() {
+    return window.matchMedia('(max-width: 600px)').matches ? 1.3 : 1.45;
+  }
+
+  function menuLetterSpacingEm(widthPercent) {
+    return (widthPercent - 100) / 800;
+  }
+
+  function syncMenuDisplayControls() {
+    document.getElementById('menuFontSizeRange').value = String(menuDisplaySettings.sizePercent);
+    document.getElementById('menuFontWidthRange').value = String(menuDisplaySettings.widthPercent);
+    document.getElementById('menuFontSizeValue').textContent = menuDisplaySettings.sizePercent + '%';
+    document.getElementById('menuFontWidthValue').textContent = menuDisplaySettings.widthPercent + '%';
+  }
+
+  function applyMenuDisplaySettings() {
+    const screen = document.getElementById('menuScreen');
+    const fontSizeRem = (getMenuBaseFontRem() * menuDisplaySettings.sizePercent / 100).toFixed(3);
+    const letterSpacing = menuLetterSpacingEm(menuDisplaySettings.widthPercent).toFixed(3);
+    const textScale = (menuDisplaySettings.widthPercent / 100).toFixed(3);
+
+    screen.style.setProperty('--menu-font-size', fontSizeRem + 'rem');
+    screen.style.setProperty('--menu-text-scale-x', textScale);
+    screen.style.setProperty('--menu-letter-spacing', letterSpacing + 'em');
+    syncMenuDisplayControls();
+  }
+
+  function initializeMenuDisplaySettings() {
+    menuDisplaySettings = loadMenuDisplaySettings();
+    applyMenuDisplaySettings();
+  }
+
+  function updateMenuDisplaySetting(patch) {
+    menuDisplaySettings = sanitizeMenuDisplaySettings({ ...menuDisplaySettings, ...patch });
+    applyMenuDisplaySettings();
+    persistMenuDisplaySettings();
+  }
+
+  function resetMenuDisplaySettings() {
+    menuDisplaySettings = { ...defaultMenuDisplaySettings };
+    applyMenuDisplaySettings();
+    persistMenuDisplaySettings();
   }
 
   function parseMenuPayload() {
@@ -1352,6 +1437,13 @@
   document.getElementById('menuEnterBtn').addEventListener('click', openSelectedMenuItem);
   document.getElementById('menuBackBtn').addEventListener('click', goBackInMenu);
   document.getElementById('menuHomeBtn').addEventListener('click', goHomeInMenu);
+  document.getElementById('menuFontSizeRange').addEventListener('input', (event) => {
+    updateMenuDisplaySetting({ sizePercent: Number(event.target.value) });
+  });
+  document.getElementById('menuFontWidthRange').addEventListener('input', (event) => {
+    updateMenuDisplaySetting({ widthPercent: Number(event.target.value) });
+  });
+  document.getElementById('resetMenuDisplayBtn').addEventListener('click', resetMenuDisplaySettings);
   document.getElementById('saveMenuEditBtn').addEventListener('click', saveMenuEdit);
   document.getElementById('cancelMenuEditBtn').addEventListener('click', closeMenuEditModal);
   document.getElementById('menuEditSelectInput').addEventListener('change', (event) => {
@@ -1400,7 +1492,9 @@
       goHomeInMenu();
     }
   });
+  window.addEventListener('resize', applyMenuDisplaySettings);
 
+  initializeMenuDisplaySettings();
   initializeMenuWidget();
   refresh();
   setInterval(refresh, 1000);

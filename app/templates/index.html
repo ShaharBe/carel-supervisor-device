@@ -58,13 +58,27 @@
       <button id="editPropBandBtn" class="small-btn" type="button" disabled>Edit</button>
     </div>
 
-    <section class="menu-widget" aria-labelledby="menuWidgetTitle">
+    <section id="menuWidgetRoot" class="menu-widget" aria-labelledby="menuWidgetTitle">
       <div class="menu-widget-head">
         <div>
           <h3 id="menuWidgetTitle" class="menu-widget-title">Controller Menu</h3>
           <div id="menuWidgetPath" class="menu-widget-path muted">Loading menu path...</div>
         </div>
         <span id="menuWidgetState" class="menu-widget-state muted">Loading...</span>
+      </div>
+
+      <div class="menu-display-tools" aria-label="Menu display settings">
+        <label class="menu-display-control" for="menuFontSizeRange">
+          <span>Size</span>
+          <input id="menuFontSizeRange" type="range" min="80" max="180" step="5" value="100" />
+          <span id="menuFontSizeValue" class="menu-display-value">100%</span>
+        </label>
+        <label class="menu-display-control" for="menuFontWidthRange">
+          <span>Width</span>
+          <input id="menuFontWidthRange" type="range" min="70" max="110" step="2" value="88" />
+          <span id="menuFontWidthValue" class="menu-display-value">88%</span>
+        </label>
+        <button id="resetMenuDisplayBtn" class="small-btn menu-display-reset" type="button">Reset</button>
       </div>
 
       <div class="lcd-shell">
