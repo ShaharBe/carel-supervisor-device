@@ -549,14 +549,14 @@
                   "path": "3.2.3.1",
                   "title": "Select data view on main mask",
                   "display_label": "Select data view on main mask",
-                  "raw_text": "Select data view on main mask [\"Ampere\", \"Kg-lb/h\", \"Hours\"...] (!! Not documented in modbus)",
+                  "raw_text": "Select data view on main mask does not modify a modbus register. Currently unsupported",
                   "kind": "leaf",
                   "children": [],
                   "register": null,
                   "range_or_options": "\"Ampere\", \"Kg-lb/h\", \"Hours\"",
                   "note": null,
                   "is_caption": false,
-                  "is_stub": false,
+                  "is_stub": true,
                   "page_direction": null
                 },
                 {
@@ -863,6 +863,7 @@
                     "index": 152,
                     "access": "R/W"
                   },
+                  "quantity": "percent",
                   "range_or_options": "percent",
                   "note": null,
                   "is_caption": false,
@@ -881,6 +882,7 @@
                     "index": 151,
                     "access": "R/W"
                   },
+                  "quantity": "percent",
                   "range_or_options": "percent",
                   "note": null,
                   "is_caption": false,
@@ -917,6 +919,7 @@
                     "index": 147,
                     "access": "R/W"
                   },
+                  "quantity": "hours",
                   "range_or_options": "hours",
                   "note": null,
                   "is_caption": false,

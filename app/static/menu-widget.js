@@ -17,11 +17,15 @@ window.CarelMenuWidget = (() => {
   const unitProfiles = {
     metric: {
       temperature: '\u00B0C',
-      production_rate: 'kg/h'
+      production_rate: 'kg/h',
+      percent: '%',
+      hours: 'h'
     },
     imperial: {
       temperature: '\u00B0F',
-      production_rate: 'lb/h'
+      production_rate: 'lb/h',
+      percent: '%',
+      hours: 'h'
     }
   };
   let menuEditState = {
@@ -223,10 +227,19 @@ window.CarelMenuWidget = (() => {
     }
 
     if (node.display_unit && isNumericRangeHint(rangeHint)) {
-      return rangeHint + ' ' + node.display_unit;
+      return formatValueWithUnit(rangeHint, node.display_unit);
     }
 
     return rangeHint;
+  }
+
+  function formatValueWithUnit(valueText, unit) {
+    if (!unit) {
+      return valueText;
+    }
+
+    const compactUnits = new Set(['%', 'h']);
+    return compactUnits.has(unit) ? valueText + unit : valueText + ' ' + unit;
   }
 
   function applyRuntimeNodeDecorations(node, runtimeContext) {
@@ -704,7 +717,7 @@ window.CarelMenuWidget = (() => {
       const numericValue = Number(value);
       if (Number.isFinite(numericValue)) {
         const formatted = String(Math.round(numericValue));
-        return node.display_unit ? formatted + ' ' + node.display_unit : formatted;
+        return formatValueWithUnit(formatted, node.display_unit);
       }
     }
 
@@ -712,7 +725,7 @@ window.CarelMenuWidget = (() => {
       const numericValue = Number(value);
       if (Number.isFinite(numericValue)) {
         const formatted = numericValue.toFixed(1);
-        return node.display_unit ? formatted + ' ' + node.display_unit : formatted;
+        return formatValueWithUnit(formatted, node.display_unit);
       }
     }
 
