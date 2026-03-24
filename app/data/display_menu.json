@@ -661,7 +661,8 @@
               "display_label": "Operations Options (2/3)",
               "raw_text": "Operations Options (2/3)",
               "kind": "menu",
-              "visible": false,
+              "visible": true,
+              "show_in_parent": false,
               "children": [
                 {
                   "path": "3.2.4.1",
@@ -875,7 +876,8 @@
               "display_label": "Drainage Options (2/2)",
               "raw_text": "Drainage Options (2/2)",
               "kind": "menu",
-              "visible": false,
+              "visible": true,
+              "show_in_parent": false,
               "children": [
                 {
                   "path": "3.2.6.1",

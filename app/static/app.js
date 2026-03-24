@@ -337,12 +337,16 @@
     return node?.visible !== false;
   }
 
-  function getVisibleMenuChildren(node) {
-    return (node.children || []).filter((child) => isMenuNodeVisible(child));
+  function isMenuNodeListedInParent(node) {
+    return isMenuNodeVisible(node) && node?.show_in_parent !== false;
+  }
+
+  function getListedMenuChildren(node) {
+    return (node.children || []).filter((child) => isMenuNodeListedInParent(child));
   }
 
   function getCurrentMenuChildren() {
-    return getVisibleMenuChildren(getMenuNode(menuCurrentPath));
+    return getListedMenuChildren(getMenuNode(menuCurrentPath));
   }
 
   function clampMenuSelection() {
@@ -686,7 +690,7 @@
   function menuDetailMeta(node) {
     const fragments = [];
     if (node.kind === 'menu') {
-      const count = getVisibleMenuChildren(node).length;
+      const count = getListedMenuChildren(node).length;
       const itemLabel = count === 1 ? 'item' : 'items';
       fragments.push('Submenu with ' + count + ' ' + itemLabel);
     } else if (node.kind === 'caption') {
@@ -793,8 +797,8 @@
   }
 
   function findSelectableChildIndex(menuNode, preferredChildPath) {
-    const visibleChildren = getVisibleMenuChildren(menuNode);
-    if (visibleChildren.length === 0) {
+    const listedChildren = getListedMenuChildren(menuNode);
+    if (listedChildren.length === 0) {
       return 0;
     }
 
@@ -802,7 +806,7 @@
       return 0;
     }
 
-    const directIndex = visibleChildren.findIndex((child) => child.path === preferredChildPath);
+    const directIndex = listedChildren.findIndex((child) => child.path === preferredChildPath);
     if (directIndex !== -1) {
       return directIndex;
     }
@@ -814,14 +818,14 @@
     }
 
     for (let index = targetIndex - 1; index >= 0; index -= 1) {
-      if (isMenuNodeVisible(allChildren[index])) {
-        return visibleChildren.findIndex((child) => child.path === allChildren[index].path);
+      if (isMenuNodeListedInParent(allChildren[index])) {
+        return listedChildren.findIndex((child) => child.path === allChildren[index].path);
       }
     }
 
     for (let index = targetIndex + 1; index < allChildren.length; index += 1) {
-      if (isMenuNodeVisible(allChildren[index])) {
-        return visibleChildren.findIndex((child) => child.path === allChildren[index].path);
+      if (isMenuNodeListedInParent(allChildren[index])) {
+        return listedChildren.findIndex((child) => child.path === allChildren[index].path);
       }
     }
 
@@ -851,7 +855,7 @@
     }
 
     const currentMenu = getMenuNode(menuCurrentPath);
-    const children = getVisibleMenuChildren(currentMenu);
+    const children = getListedMenuChildren(currentMenu);
     clampMenuSelection();
 
     path.textContent = buildMenuBreadcrumb(currentMenu);
@@ -943,7 +947,9 @@
     }
 
     const parent = getMenuNode(currentMenu.parent_path || '');
-    const siblingMenus = (parent.children || []).filter((child) => child.kind === 'menu');
+    const siblingMenus = (parent.children || []).filter(
+      (child) => child.kind === 'menu' && isMenuNodeVisible(child)
+    );
     const currentIndex = siblingMenus.findIndex((child) => child.path === currentMenu.path);
     if (currentIndex === -1) {
       return;
