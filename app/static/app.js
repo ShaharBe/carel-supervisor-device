@@ -12,6 +12,8 @@
   };
   let lastAlarmState = null;
   let clearAlarmsBusy = false;
+  let baseMenuPayload = null;
+  let baseMenuIndex = new Map();
   let menuPayload = null;
   let menuIndex = new Map();
   let menuCurrentPath = '';
@@ -19,6 +21,18 @@
   const menuValueStore = new Map();
   const menuValueStateStore = new Map();
   let menuValueRequestSequence = 0;
+  const measureUnitsPath = '3.2.1.5';
+  let menuRuleDriverPaths = [];
+  const unitProfiles = {
+    metric: {
+      temperature: '\u00B0C',
+      production_rate: 'kg/h'
+    },
+    imperial: {
+      temperature: '\u00B0F',
+      production_rate: 'lb/h'
+    }
+  };
   let menuEditState = {
     open: false,
     nodePath: null,
@@ -131,24 +145,188 @@
     }
   }
 
-  function indexMenuTree(node, parentPath) {
+  function indexMenuTree(node, parentPath, targetIndex = menuIndex) {
     if (!node) {
       return;
     }
 
     node.parent_path = parentPath;
-    menuIndex.set(node.path, node);
-    (node.children || []).forEach((child) => indexMenuTree(child, node.path));
+    targetIndex.set(node.path, node);
+    (node.children || []).forEach((child) => indexMenuTree(child, node.path, targetIndex));
   }
 
   function initializeMenuWidget() {
-    menuPayload = parseMenuPayload();
-    menuIndex = new Map();
-    indexMenuTree(menuPayload.root, null);
+    baseMenuPayload = parseMenuPayload();
+    baseMenuIndex = new Map();
+    indexMenuTree(baseMenuPayload.root, null, baseMenuIndex);
+    menuRuleDriverPaths = collectMenuRuleDriverPaths();
+    rebuildRuntimeMenuTree();
     menuCurrentPath = '';
     menuSelectedIndex = 0;
     renderMenuWidget();
     refreshVisibleMenuLeafValues(true);
+  }
+
+  function walkMenuNodes(node, visitor) {
+    if (!node) {
+      return;
+    }
+
+    visitor(node);
+    (node.children || []).forEach((child) => walkMenuNodes(child, visitor));
+  }
+
+  function collectMenuRuleDriverPaths() {
+    if (!baseMenuPayload?.ok) {
+      return [];
+    }
+
+    const paths = new Set();
+    walkMenuNodes(baseMenuPayload.root, (node) => {
+      if (node.visible_if?.path) {
+        paths.add(String(node.visible_if.path));
+      }
+      if (node.quantity) {
+        paths.add(node.unit_source_path || measureUnitsPath);
+      }
+    });
+    return Array.from(paths);
+  }
+
+  function getBaseMenuNode(path) {
+    return baseMenuIndex.get(path) || baseMenuPayload?.root || null;
+  }
+
+  function cloneMenuRoot(root) {
+    return JSON.parse(JSON.stringify(root));
+  }
+
+  function resolveMeasureUnitProfile(rawValue) {
+    const isImperial =
+      rawValue === true ||
+      rawValue === 1 ||
+      rawValue === '1' ||
+      String(rawValue).toLowerCase() === 'true';
+    return isImperial ? unitProfiles.imperial : unitProfiles.metric;
+  }
+
+  function evaluateVisibleRule(rule) {
+    if (!rule || !rule.path) {
+      return true;
+    }
+
+    const currentValue = menuValueStore.get(String(rule.path));
+    if (currentValue === undefined) {
+      return false;
+    }
+
+    const operator = rule.operator || 'equals';
+    const values = Array.isArray(rule.values) ? rule.values : [];
+    if (operator === 'in') {
+      return values.some((candidate) => String(candidate) === String(currentValue));
+    }
+    if (operator === 'equals') {
+      const expected = values.length > 0 ? values[0] : rule.value;
+      return String(expected) === String(currentValue);
+    }
+    return true;
+  }
+
+  function decorateRangeHint(node, rangeHint) {
+    if (!rangeHint) {
+      return rangeHint;
+    }
+
+    if (node.display_unit && isNumericRangeHint(rangeHint)) {
+      return rangeHint + ' ' + node.display_unit;
+    }
+
+    return rangeHint;
+  }
+
+  function applyRuntimeNodeDecorations(node, runtimeContext) {
+    const baseVisible = node.visible !== false;
+    node.visible = baseVisible && evaluateVisibleRule(node.visible_if);
+    node.display_unit = null;
+    node.display_range_or_options = node.range_or_options;
+
+    if (node.quantity) {
+      const unitProfile = runtimeContext.unitProfiles[node.unit_source_path || measureUnitsPath] || runtimeContext.defaultUnitProfile;
+      node.display_unit = unitProfile?.[node.quantity] || null;
+      node.display_range_or_options = decorateRangeHint(node, node.range_or_options);
+    }
+
+    (node.children || []).forEach((child) => applyRuntimeNodeDecorations(child, runtimeContext));
+  }
+
+  function isMenuNodeAndAncestorsVisible(path) {
+    let current = getMenuNode(path);
+    if (!current) {
+      return false;
+    }
+
+    while (current) {
+      if (current.path !== '' && !isMenuNodeVisible(current)) {
+        return false;
+      }
+      if (current.parent_path === null) {
+        break;
+      }
+      current = getMenuNode(current.parent_path);
+    }
+
+    return true;
+  }
+
+  function reconcileMenuLocation() {
+    if (isMenuNodeAndAncestorsVisible(menuCurrentPath)) {
+      return;
+    }
+
+    let currentPath = menuCurrentPath;
+    while (currentPath) {
+      const currentNode = getMenuNode(currentPath);
+      const parentPath = currentNode?.parent_path || '';
+      if (isMenuNodeAndAncestorsVisible(parentPath)) {
+        menuCurrentPath = parentPath;
+        menuSelectedIndex = findSelectableChildIndex(getMenuNode(parentPath), currentPath);
+        return;
+      }
+      currentPath = parentPath;
+    }
+
+    menuCurrentPath = '';
+    menuSelectedIndex = 0;
+  }
+
+  function rebuildRuntimeMenuTree() {
+    if (!baseMenuPayload) {
+      return;
+    }
+
+    if (!baseMenuPayload.ok) {
+      menuPayload = baseMenuPayload;
+      menuIndex = new Map();
+      indexMenuTree(menuPayload.root, null, menuIndex);
+      return;
+    }
+
+    const runtimeRoot = cloneMenuRoot(baseMenuPayload.root);
+    const runtimeContext = {
+      defaultUnitProfile: resolveMeasureUnitProfile(menuValueStore.get(measureUnitsPath)),
+      unitProfiles: {
+        [measureUnitsPath]: resolveMeasureUnitProfile(menuValueStore.get(measureUnitsPath))
+      }
+    };
+
+    applyRuntimeNodeDecorations(runtimeRoot, runtimeContext);
+    menuPayload = {
+      ...baseMenuPayload,
+      root: runtimeRoot
+    };
+    menuIndex = new Map();
+    indexMenuTree(menuPayload.root, null, menuIndex);
+    reconcileMenuLocation();
   }
 
   function getMenuNode(path) {
@@ -430,14 +608,16 @@
     if (editor.type === 'integer') {
       const numericValue = Number(value);
       if (Number.isFinite(numericValue)) {
-        return String(Math.round(numericValue));
+        const formatted = String(Math.round(numericValue));
+        return node.display_unit ? formatted + ' ' + node.display_unit : formatted;
       }
     }
 
     if (editor.type === 'float') {
       const numericValue = Number(value);
       if (Number.isFinite(numericValue)) {
-        return numericValue.toFixed(1);
+        const formatted = numericValue.toFixed(1);
+        return node.display_unit ? formatted + ' ' + node.display_unit : formatted;
       }
     }
 
@@ -525,8 +705,12 @@
       );
     }
 
-    if (node.range_or_options) {
-      fragments.push('Options/range: ' + node.range_or_options);
+    if (node.display_unit) {
+      fragments.push('Unit: ' + node.display_unit);
+    }
+
+    if (node.display_range_or_options || node.range_or_options) {
+      fragments.push('Options/range: ' + (node.display_range_or_options || node.range_or_options));
     }
 
     return fragments.join(' | ');
@@ -867,6 +1051,7 @@
 
   function populateMenuEditForm() {
     const editor = menuEditState.editor;
+    const node = currentMenuEditNode();
     if (!editor) {
       return;
     }
@@ -876,6 +1061,15 @@
     const selectField = document.getElementById('menuEditSelectField');
     const numberInput = document.getElementById('menuEditNumberInput');
     const selectInput = document.getElementById('menuEditSelectInput');
+    const numberLabel = document.querySelector('label[for="menuEditNumberInput"]');
+    const selectLabel = document.querySelector('label[for="menuEditSelectInput"]');
+
+    if (numberLabel) {
+      numberLabel.textContent = node?.display_unit ? 'Value (' + node.display_unit + ')' : 'Value';
+    }
+    if (selectLabel) {
+      selectLabel.textContent = 'Value';
+    }
 
     choiceGroup.hidden = true;
     numberField.hidden = true;
@@ -956,6 +1150,33 @@
 
     menuValueStore.set(node.path, payload.value);
     return payload;
+  }
+
+  function isMenuRuleDriverPath(path) {
+    return menuRuleDriverPaths.includes(path);
+  }
+
+  async function refreshMenuRuleDrivers() {
+    if (!baseMenuPayload?.ok || menuRuleDriverPaths.length === 0) {
+      return;
+    }
+
+    await Promise.allSettled(
+      menuRuleDriverPaths.map(async (path) => {
+        const node = getBaseMenuNode(path);
+        if (!node || !menuNodeSupportsRemoteRead(node)) {
+          return;
+        }
+
+        setMenuValueState(path, { loading: true, error: null });
+        try {
+          await fetchMenuNodeValue(node, { refresh: true });
+          setMenuValueState(path, { loading: false, error: null });
+        } catch (error) {
+          setMenuValueState(path, { loading: false, error: error.message });
+        }
+      })
+    );
   }
 
   function closeMenuEditModal() {
@@ -1084,6 +1305,9 @@
       return;
     }
 
+    if (isMenuRuleDriverPath(node.path)) {
+      rebuildRuntimeMenuTree();
+    }
     closeMenuEditModal();
     renderMenuWidget();
     document.getElementById('menuScreen').focus();
@@ -1196,6 +1420,10 @@
       const r = await fetch('api/temp');
       const j = await r.json();
       syncMenuCacheFromDashboard(j);
+      await refreshMenuRuleDrivers();
+      rebuildRuntimeMenuTree();
+      renderMenuWidget();
+      refreshVisibleMenuLeafValues(true);
 
       lastRtcIsoLocal = j.device_time_iso_local || lastRtcIsoLocal;
 

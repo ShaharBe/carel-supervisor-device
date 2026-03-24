@@ -42,6 +42,7 @@
             "index": 19,
             "access": "R/W"
           },
+          "quantity": "temperature",
           "range_or_options": null,
           "note": null,
           "is_caption": false,
@@ -96,6 +97,7 @@
             "index": 20,
             "access": "R/W"
           },
+          "quantity": "temperature",
           "range_or_options": "2..19.9",
           "note": null,
           "is_caption": false,
@@ -310,6 +312,11 @@
                       }
                     ]
                   },
+                  "visible_if": {
+                    "path": "3.2.1.1",
+                    "operator": "in",
+                    "values": [2, 4]
+                  },
                   "range_or_options": null,
                   "note": "\"Limit:\" appears only if \"Select Regulation\" choice contains: \"+ limit\"",
                   "is_caption": false,
@@ -438,6 +445,11 @@
                   "kind": "caption",
                   "children": [],
                   "register": null,
+                  "visible_if": {
+                    "path": "3.2.1.1",
+                    "operator": "in",
+                    "values": [2, 4]
+                  },
                   "range_or_options": null,
                   "note": null,
                   "is_caption": true,
@@ -455,6 +467,11 @@
                     "family": "A",
                     "index": 7,
                     "access": "R/W"
+                  },
+                  "visible_if": {
+                    "path": "3.2.1.1",
+                    "operator": "in",
+                    "values": [2, 4]
                   },
                   "range_or_options": null,
                   "note": null,
@@ -474,6 +491,11 @@
                     "index": 8,
                     "access": "R/W"
                   },
+                  "visible_if": {
+                    "path": "3.2.1.1",
+                    "operator": "in",
+                    "values": [2, 4]
+                  },
                   "range_or_options": null,
                   "note": null,
                   "is_caption": false,
@@ -491,6 +513,11 @@
                     "family": "A",
                     "index": 9,
                     "access": "R/W"
+                  },
+                  "visible_if": {
+                    "path": "3.2.1.1",
+                    "operator": "in",
+                    "values": [2, 4]
                   },
                   "range_or_options": null,
                   "note": null,
