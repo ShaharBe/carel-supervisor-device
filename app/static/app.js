@@ -63,7 +63,7 @@
 
   function menuWidgetScriptUrl() {
     const existing = document.querySelector('script[src*="menu-widget.js"]');
-    return existing?.src || '/static/menu-widget.js';
+    return existing?.src || 'static/menu-widget.js';
   }
 
   function loadMenuWidgetScript() {
