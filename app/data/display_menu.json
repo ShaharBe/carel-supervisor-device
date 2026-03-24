@@ -328,6 +328,19 @@
                     "index": 7,
                     "access": "R/W"
                   },
+                  "editor": {
+                    "type": "boolean",
+                    "options": [
+                      {
+                        "value": true,
+                        "label": "C-kg/hr"
+                      },
+                      {
+                        "value": false,
+                        "label": "F-lb/h"
+                      }
+                    ]
+                  },
                   "range_or_options": "C-kg/hr,F-lb/h",
                   "note": "Measure Units. Toggles: 'C-kg/hr' and 'F-lb/h'. Affects: A,1,R (demand) A,10,R (production) A,19,R/W (temperature setpoint)",
                   "is_caption": false,
