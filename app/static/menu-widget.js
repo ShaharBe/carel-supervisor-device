@@ -20,14 +20,16 @@ window.CarelMenuWidget = (() => {
       production_rate: 'kg/h',
       percent: '%',
       hours: 'h',
-      days: 'd'
+      days: 'd',
+      conductivity: 'uS/cm'
     },
     imperial: {
       temperature: '\u00B0F',
       production_rate: 'lb/h',
       percent: '%',
       hours: 'h',
-      days: 'd'
+      days: 'd',
+      conductivity: 'uS/cm'
     }
   };
   let menuEditState = {
