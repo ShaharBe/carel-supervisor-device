@@ -156,6 +156,7 @@ last_detected_port: Optional[str] = None
 last_adapter_missing = False
 last_connected_port: Optional[str] = None
 last_runtime_error: Optional[str] = None
+interactive_modbus_deadline_monotonic = 0.0
 
 active_com_port = COM_PORT
 client = build_modbus_client(active_com_port)
@@ -211,6 +212,18 @@ def clear_runtime_error() -> None:
         if last_runtime_error is not None:
             logger.info("Modbus communication recovered on %s", active_com_port)
         last_runtime_error = None
+
+
+def request_interactive_modbus_priority(duration_s: float = 2.0) -> None:
+    global interactive_modbus_deadline_monotonic
+    deadline = time.monotonic() + max(0.1, duration_s)
+    with runtime_state_lock:
+        interactive_modbus_deadline_monotonic = max(interactive_modbus_deadline_monotonic, deadline)
+
+
+def interactive_modbus_priority_active() -> bool:
+    with runtime_state_lock:
+        return time.monotonic() < interactive_modbus_deadline_monotonic
 
 
 def read_log_tail(limit: int = 200) -> str:
@@ -539,6 +552,9 @@ def poll_registers_once() -> None:
         with cache_lock:
             cache.last_error = error_message
 
+    if interactive_modbus_priority_active():
+        return
+
     try:
         with modbus_lock:
             modbus_connect_or_raise()
@@ -556,6 +572,9 @@ def poll_registers_once() -> None:
         error_message = normalize_modbus_error(exc)
         with cache_lock:
             cache.rtc_error = error_message
+
+    if interactive_modbus_priority_active():
+        return
 
     try:
         with modbus_lock:
@@ -590,6 +609,9 @@ def poll_registers_once() -> None:
         with cache_lock:
             cache.info_error = error_message
 
+    if interactive_modbus_priority_active():
+        return
+
     try:
         with modbus_lock:
             modbus_connect_or_raise()
@@ -606,6 +628,9 @@ def poll_registers_once() -> None:
         reset_modbus_client()
         with cache_lock:
             cache.info_humidifier_status = None
+
+    if interactive_modbus_priority_active():
+        return
 
     try:
         active_alarms: list[dict[str, Any]] = []
@@ -649,6 +674,9 @@ def poll_registers_once() -> None:
             cache.alarms_last_scan_utc = now_iso()
             cache.alarms_error = error_message
 
+    if interactive_modbus_priority_active():
+        return
+
     try:
         with modbus_lock:
             modbus_connect_or_raise()
@@ -672,6 +700,9 @@ def poll_registers_once() -> None:
 
 def poller_loop(stop_evt: threading.Event) -> None:
     while not stop_evt.is_set():
+        if interactive_modbus_priority_active():
+            stop_evt.wait(0.1)
+            continue
         poll_registers_once()
         stop_evt.wait(POLL_INTERVAL_S)
 

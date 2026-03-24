@@ -5,6 +5,8 @@
   let lastRtcIsoLocal = null;
   let lastAlarmState = null;
   let clearAlarmsBusy = false;
+  let refreshInFlight = null;
+  let refreshQueued = false;
 
   const humidifierStatusMap = {
     0: 'On duty',
@@ -241,7 +243,7 @@
     }
   }
 
-  async function refresh() {
+  async function performRefresh() {
     try {
       const response = await fetch('api/temp');
       const payload = await response.json();
@@ -288,6 +290,27 @@
       document.getElementById('alarmsHint').textContent = String(error);
       document.getElementById('alarmsHint').className = 'alarm-hint err';
     }
+  }
+
+  function refresh() {
+    if (refreshInFlight) {
+      refreshQueued = true;
+      return refreshInFlight;
+    }
+
+    refreshInFlight = (async () => {
+      try {
+        await performRefresh();
+      } finally {
+        refreshInFlight = null;
+        if (refreshQueued) {
+          refreshQueued = false;
+          void refresh();
+        }
+      }
+    })();
+
+    return refreshInFlight;
   }
 
   async function saveRtc() {

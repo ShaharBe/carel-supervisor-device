@@ -12,6 +12,8 @@ window.CarelMenuWidget = (() => {
   let menuValueRequestSequence = 0;
   const measureUnitsPath = '3.2.1.5';
   let menuRuleDriverPaths = [];
+  let lastMenuRuleDriverRefreshAt = 0;
+  const menuRuleDriverRefreshIntervalMs = 5000;
   const unitProfiles = {
     metric: {
       temperature: '\u00B0C',
@@ -637,7 +639,7 @@ window.CarelMenuWidget = (() => {
     return '--';
   }
 
-  function refreshVisibleMenuLeafValues(forceRefresh = true) {
+  async function refreshVisibleMenuLeafValues(forceRefresh = true) {
     const activeMenuPath = menuCurrentPath;
     const requestSequence = ++menuValueRequestSequence;
     const visibleLeaves = getCurrentMenuChildren().filter(
@@ -656,7 +658,11 @@ window.CarelMenuWidget = (() => {
     });
     renderMenuWidget();
 
-    targetLeaves.forEach(async (node) => {
+    for (const node of targetLeaves) {
+      if (menuCurrentPath !== activeMenuPath || requestSequence !== menuValueRequestSequence) {
+        break;
+      }
+
       try {
         await fetchMenuNodeValue(node, { refresh: true });
         setMenuValueState(node.path, { loading: false, error: null });
@@ -667,7 +673,7 @@ window.CarelMenuWidget = (() => {
       if (menuCurrentPath === activeMenuPath && requestSequence === menuValueRequestSequence) {
         renderMenuWidget();
       }
-    });
+    }
   }
 
   function menuDetailMeta(node) {
@@ -1145,27 +1151,31 @@ window.CarelMenuWidget = (() => {
     return menuRuleDriverPaths.includes(path);
   }
 
-  async function refreshMenuRuleDrivers() {
+  async function refreshMenuRuleDrivers(forceRefresh = false) {
     if (!baseMenuPayload?.ok || menuRuleDriverPaths.length === 0) {
       return;
     }
 
-    await Promise.allSettled(
-      menuRuleDriverPaths.map(async (path) => {
-        const node = getBaseMenuNode(path);
-        if (!node || !menuNodeSupportsRemoteRead(node)) {
-          return;
-        }
+    const now = Date.now();
+    if (!forceRefresh && now - lastMenuRuleDriverRefreshAt < menuRuleDriverRefreshIntervalMs) {
+      return;
+    }
 
-        setMenuValueState(path, { loading: true, error: null });
-        try {
-          await fetchMenuNodeValue(node, { refresh: true });
-          setMenuValueState(path, { loading: false, error: null });
-        } catch (error) {
-          setMenuValueState(path, { loading: false, error: error.message });
-        }
-      })
-    );
+    lastMenuRuleDriverRefreshAt = now;
+    for (const path of menuRuleDriverPaths) {
+      const node = getBaseMenuNode(path);
+      if (!node || !menuNodeSupportsRemoteRead(node)) {
+        continue;
+      }
+
+      setMenuValueState(path, { loading: true, error: null });
+      try {
+        await fetchMenuNodeValue(node, { refresh: true });
+        setMenuValueState(path, { loading: false, error: null });
+      } catch (error) {
+        setMenuValueState(path, { loading: false, error: error.message });
+      }
+    }
   }
 
   function closeMenuEditModal() {
@@ -1185,6 +1195,9 @@ window.CarelMenuWidget = (() => {
     if (!editor) {
       return;
     }
+
+    // Cancel any remaining page-value refresh queue so the modal read can take priority.
+    menuValueRequestSequence += 1;
 
     menuEditState = {
       open: true,
@@ -1310,7 +1323,6 @@ window.CarelMenuWidget = (() => {
     await refreshMenuRuleDrivers();
     rebuildRuntimeMenuTree();
     renderMenuWidget();
-    refreshVisibleMenuLeafValues(true);
   }
 
   function bindEventListeners() {

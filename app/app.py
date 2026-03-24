@@ -87,6 +87,7 @@ from runtime import (
     read_device_rtc_values,
     read_holding_registers,
     read_log_tail,
+    request_interactive_modbus_priority,
     reset_modbus_client,
     start_background_poller,
     write_coil,
@@ -355,6 +356,7 @@ def read_menu_value_from_controller(node: dict[str, Any]) -> dict[str, Any]:
   editor_type = infer_menu_editor_type(node)
   path = str(node["path"])
 
+  request_interactive_modbus_priority()
   with modbus_lock:
     modbus_connect_or_raise()
     if family == "D":
@@ -445,6 +447,7 @@ def write_menu_value_to_controller(node: dict[str, Any], incoming_value: Any) ->
   path = str(node["path"])
   value, raw_value = coerce_menu_write(node, incoming_value)
 
+  request_interactive_modbus_priority()
   with modbus_lock:
     modbus_connect_or_raise()
     if family == "D":
