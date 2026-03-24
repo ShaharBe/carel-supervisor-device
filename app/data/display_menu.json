@@ -162,27 +162,27 @@
                     "options": [
                       {
                         "value": 0,
-                        "label": "on/off"
+                        "label": "On/Off ext. contact"
                       },
                       {
                         "value": 1,
-                        "label": "slave 0-100%"
+                        "label": "Proportional Ext. Signal"
                       },
                       {
                         "value": 2,
-                        "label": "slave 0-100% + limit probe"
+                        "label": "Ext. Signal + limit probe"
                       },
                       {
                         "value": 3,
-                        "label": "%rh control with external probe without limit probe"
+                        "label": "Humidity probe"
                       },
                       {
                         "value": 4,
-                        "label": "%rh control with external probe + limit probe"
+                        "label": "Humidity probe + limit probe"
                       },
                       {
                         "value": 5,
-                        "label": "temperature control"
+                        "label": "Temperature probe"
                       }
                     ]
                   },
@@ -223,11 +223,11 @@
                     "options": [
                       {
                         "value": 0,
-                        "label": "0-1 V"
+                        "label": "NTC"
                       },
                       {
                         "value": 1,
-                        "label": "0-10 V"
+                        "label": "0-1 V"
                       },
                       {
                         "value": 2,
@@ -235,23 +235,23 @@
                       },
                       {
                         "value": 3,
-                        "label": "0-20 mA"
+                        "label": "0-10 V"
                       },
                       {
                         "value": 4,
-                        "label": "4-20 mA"
+                        "label": "0-20 mA"
                       },
                       {
                         "value": 5,
-                        "label": "0-135 ohm"
+                        "label": "4-20 mA"
                       },
                       {
                         "value": 6,
-                        "label": "135-1000 ohm"
+                        "label": "0-135 ohm"
                       },
                       {
                         "value": 7, 
-                        "label": "NTC CAREL standard"
+                        "label": "135-1000 ohm"
                       }
                     ]
                   },
@@ -278,11 +278,11 @@
                     "options": [
                       {
                         "value": 0,
-                        "label": "0-1 V"
+                        "label": "NTC"
                       },
                       {
                         "value": 1,
-                        "label": "0-10 V"
+                        "label": "0-1 V"
                       },
                       {
                         "value": 2,
@@ -290,23 +290,23 @@
                       },
                       {
                         "value": 3,
-                        "label": "0-20 mA"
+                        "label": "0-10 V"
                       },
                       {
                         "value": 4,
-                        "label": "4-20 mA"
+                        "label": "0-20 mA"
                       },
                       {
                         "value": 5,
-                        "label": "0-135 ohm"
+                        "label": "4-20 mA"
                       },
                       {
                         "value": 6,
-                        "label": "135-1000 ohm"
+                        "label": "0-135 ohm"
                       },
                       {
-                        "value": 7,
-                        "label": "NTC CAREL standard"
+                        "value": 7, 
+                        "label": "135-1000 ohm"
                       }
                     ]
                   },
@@ -320,7 +320,7 @@
                   "path": "3.2.1.5",
                   "title": "Measure Units",
                   "display_label": "Measure Units",
-                  "raw_text": "Measure Units (A,10,R/W) Note: =50 for: C-kg/hr, =110 for: F-lb/h",
+                  "raw_text": "Measure Units",
                   "kind": "leaf",
                   "children": [],
                   "register": {
@@ -329,7 +329,7 @@
                     "access": "R/W"
                   },
                   "range_or_options": null,
-                  "note": "=50 for: C-kg/hr, =110 for: F-lb/h",
+                  "note": "Measure Units. Toggles: 'C-kg/hr' and 'F-lb/h'. No Register/Coil. But Affects: A,1,R (demand) A,10,R (production) A,19,R/W (temperature setpoint)",
                   "is_caption": false,
                   "is_stub": false,
                   "page_direction": null
