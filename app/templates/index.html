@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{{APP_TITLE}}</title>
-  <link rel="stylesheet" href="static/app.css"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}?v={{ APP_COMMIT_HASH }}"/>
 </head>
 <body>
   <h2>{{APP_TITLE}}</h2>
@@ -163,6 +163,7 @@
   </div>
 
   <script id="displayMenuData" type="application/json">{{ DISPLAY_MENU|tojson }}</script>
-  <script src="static/app.js"></script>
+  <script src="{{ url_for('static', filename='menu-widget.js') }}?v={{ APP_COMMIT_HASH }}"></script>
+  <script src="{{ url_for('static', filename='app.js') }}?v={{ APP_COMMIT_HASH }}"></script>
 </body>
 </html>
