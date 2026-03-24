@@ -535,10 +535,14 @@
             },
             {
               "path": "3.2.3",
-              "title": "Operations Options (1/3)",
-              "display_label": "Operations Options (1/3)",
-              "raw_text": "Operations Options (1/3)",
+              "title": "Operating Options (1/3)",
+              "display_label": "Operating Options (1/3)",
+              "raw_text": "Operating Options (1/3)",
               "kind": "menu",
+              "page_group": "operating_options",
+              "page_group_label": "Operating Options",
+              "page_index": 1,
+              "page_count": 3,
               "visible": true,
               "children": [
                 {
@@ -632,20 +636,6 @@
                   "is_caption": false,
                   "is_stub": true,
                   "page_direction": null
-                },
-                {
-                  "path": "3.2.3.7",
-                  "title": "Next page",
-                  "display_label": "Next page",
-                  "raw_text": "(Caption) Next page",
-                  "kind": "page_link",
-                  "children": [],
-                  "register": null,
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": true,
-                  "is_stub": false,
-                  "page_direction": "next"
                 }
               ],
               "register": null,
@@ -661,8 +651,11 @@
               "display_label": "Operations Options (2/3)",
               "raw_text": "Operations Options (2/3)",
               "kind": "menu",
+              "page_group": "operating_options",
+              "page_group_label": "Operating Options",
+              "page_index": 2,
+              "page_count": 3,
               "visible": true,
-              "show_in_parent": false,
               "children": [
                 {
                   "path": "3.2.4.1",
@@ -745,20 +738,6 @@
                   "is_caption": false,
                   "is_stub": true,
                   "page_direction": null
-                },
-                {
-                  "path": "3.2.4.6",
-                  "title": "Prev page",
-                  "display_label": "Prev page",
-                  "raw_text": "(Caption) Prev page",
-                  "kind": "page_link",
-                  "children": [],
-                  "register": null,
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": true,
-                  "is_stub": false,
-                  "page_direction": "prev"
                 }
               ],
               "register": null,
@@ -774,6 +753,10 @@
               "display_label": "Drainage Options (1/2)",
               "raw_text": "Drainage Options (1/2)",
               "kind": "menu",
+              "page_group": "drainage_options",
+              "page_group_label": "Drainage Options",
+              "page_index": 1,
+              "page_count": 2,
               "visible": true,
               "children": [
                 {
@@ -847,20 +830,6 @@
                   "is_caption": false,
                   "is_stub": false,
                   "page_direction": null
-                },
-                {
-                  "path": "3.2.5.5",
-                  "title": "Next Page",
-                  "display_label": "Next Page",
-                  "raw_text": "Next Page",
-                  "kind": "page_link",
-                  "children": [],
-                  "register": null,
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": false,
-                  "page_direction": "next"
                 }
               ],
               "register": null,
@@ -876,8 +845,11 @@
               "display_label": "Drainage Options (2/2)",
               "raw_text": "Drainage Options (2/2)",
               "kind": "menu",
+              "page_group": "drainage_options",
+              "page_group_label": "Drainage Options",
+              "page_index": 2,
+              "page_count": 2,
               "visible": true,
-              "show_in_parent": false,
               "children": [
                 {
                   "path": "3.2.6.1",
@@ -950,20 +922,6 @@
                   "is_caption": false,
                   "is_stub": false,
                   "page_direction": null
-                },
-                {
-                  "path": "3.2.6.5",
-                  "title": "Prev Page",
-                  "display_label": "Prev Page",
-                  "raw_text": "Prev Page",
-                  "kind": "page_link",
-                  "children": [],
-                  "register": null,
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": false,
-                  "page_direction": "prev"
                 }
               ],
               "register": null,

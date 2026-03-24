@@ -322,12 +322,118 @@ window.CarelMenuWidget = (() => {
     return node?.visible !== false;
   }
 
+  function isPageGroupMenu(node) {
+    return node?.kind === 'menu' && Boolean(node?.page_group);
+  }
+
+  function stripPageCountSuffix(label) {
+    return String(label || '').replace(/\s*\(\d+\s*\/\s*\d+\)\s*$/, '').trim();
+  }
+
+  function getPageGroupBaseLabel(node) {
+    return node?.page_group_label || stripPageCountSuffix(node?.display_label || node?.title || node?.path || '');
+  }
+
+  function getMenuNodeDisplayLabel(node) {
+    if (!node) {
+      return '';
+    }
+
+    if (isPageGroupMenu(node)) {
+      return getPageGroupBaseLabel(node) + ' (' + node.page_index + '/' + node.page_count + ')';
+    }
+
+    return node.display_label || node.title || node.path;
+  }
+
+  function getParentListMenuLabel(node) {
+    if (!node) {
+      return '';
+    }
+
+    if (isPageGroupMenu(node)) {
+      return getPageGroupBaseLabel(node);
+    }
+
+    return getMenuNodeDisplayLabel(node);
+  }
+
+  function getPageGroupMenuSiblings(node) {
+    if (!isPageGroupMenu(node)) {
+      return [];
+    }
+
+    const parent = getMenuNode(node.parent_path || '');
+    return (parent.children || [])
+      .filter(
+        (child) => child.kind === 'menu' && isMenuNodeVisible(child) && child.page_group === node.page_group
+      )
+      .sort((left, right) => Number(left.page_index || 0) - Number(right.page_index || 0));
+  }
+
+  function buildGeneratedPageLinks(node) {
+    if (!isPageGroupMenu(node)) {
+      return [];
+    }
+
+    const siblings = getPageGroupMenuSiblings(node);
+    const currentIndex = siblings.findIndex((child) => child.path === node.path);
+    if (currentIndex === -1) {
+      return [];
+    }
+
+    const links = [];
+    if (currentIndex > 0) {
+      links.push({
+        path: node.path + '::__prev_page__',
+        title: 'Prev page',
+        display_label: 'Prev page',
+        raw_text: '(Generated) Prev page',
+        kind: 'page_link',
+        children: [],
+        register: null,
+        range_or_options: null,
+        note: null,
+        is_caption: true,
+        is_stub: false,
+        page_direction: 'prev',
+      });
+    }
+    if (currentIndex < siblings.length - 1) {
+      links.push({
+        path: node.path + '::__next_page__',
+        title: 'Next page',
+        display_label: 'Next page',
+        raw_text: '(Generated) Next page',
+        kind: 'page_link',
+        children: [],
+        register: null,
+        range_or_options: null,
+        note: null,
+        is_caption: true,
+        is_stub: false,
+        page_direction: 'next',
+      });
+    }
+
+    return links;
+  }
+
   function isMenuNodeListedInParent(node) {
-    return isMenuNodeVisible(node) && node?.show_in_parent !== false;
+    if (!isMenuNodeVisible(node)) {
+      return false;
+    }
+
+    if (isPageGroupMenu(node)) {
+      return Number(node.page_index || 1) === 1;
+    }
+
+    return true;
   }
 
   function getListedMenuChildren(node) {
-    return (node.children || []).filter((child) => isMenuNodeListedInParent(child));
+    const listedChildren = (node.children || []).filter((child) => isMenuNodeListedInParent(child));
+    return listedChildren.concat(buildGeneratedPageLinks(node));
   }
 
   function getCurrentMenuChildren() {
@@ -380,7 +486,7 @@ window.CarelMenuWidget = (() => {
     const labels = [];
     let current = node;
     while (current && current.path !== '') {
-      labels.unshift(current.display_label || current.title || current.path);
+      labels.unshift(getMenuNodeDisplayLabel(current));
       current = current.parent_path === null ? null : getMenuNode(current.parent_path);
     }
     return labels.length > 0 ? labels.join(' > ') : 'Root';
@@ -413,7 +519,7 @@ window.CarelMenuWidget = (() => {
     }
 
     const hint = node.range_or_options || '';
-    const label = node.display_label || '';
+    const label = getMenuNodeDisplayLabel(node);
     if (/\d+\.\d+/.test(hint) || /\b(offset|band|setpoint|hyster)\b/i.test(label)) {
       return 'float';
     }
@@ -723,7 +829,7 @@ window.CarelMenuWidget = (() => {
 
     const title = document.createElement('div');
     title.className = 'menu-detail-title';
-    title.textContent = node.display_label || node.title || 'Unnamed item';
+    title.textContent = getMenuNodeDisplayLabel(node) || 'Unnamed item';
     detail.appendChild(title);
 
     const meta = document.createElement('div');
@@ -889,7 +995,7 @@ window.CarelMenuWidget = (() => {
 
       const label = document.createElement('span');
       label.className = 'menu-line-label';
-      label.textContent = child.display_label || child.title || child.path;
+      label.textContent = child.kind === 'menu' ? getParentListMenuLabel(child) : getMenuNodeDisplayLabel(child);
 
       line.appendChild(label);
 
@@ -935,10 +1041,11 @@ window.CarelMenuWidget = (() => {
       return;
     }
 
-    const parent = getMenuNode(currentMenu.parent_path || '');
-    const siblingMenus = (parent.children || []).filter(
-      (child) => child.kind === 'menu' && isMenuNodeVisible(child)
-    );
+    const siblingMenus = isPageGroupMenu(currentMenu)
+      ? getPageGroupMenuSiblings(currentMenu)
+      : (getMenuNode(currentMenu.parent_path || '').children || []).filter(
+          (child) => child.kind === 'menu' && isMenuNodeVisible(child)
+        );
     const currentIndex = siblingMenus.findIndex((child) => child.path === currentMenu.path);
     if (currentIndex === -1) {
       return;
@@ -1207,7 +1314,7 @@ window.CarelMenuWidget = (() => {
       busy: false
     };
 
-    document.getElementById('menuEditModalTitle').textContent = 'Edit ' + (node.display_label || node.title);
+    document.getElementById('menuEditModalTitle').textContent = 'Edit ' + getMenuNodeDisplayLabel(node);
     document.getElementById('menuEditModalPath').textContent = buildMenuBreadcrumb(node);
     updateMenuEditCurrentText();
     if (menuNodeSupportsRemoteWrite(node)) {
