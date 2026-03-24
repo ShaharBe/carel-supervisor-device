@@ -332,11 +332,11 @@
                     "type": "boolean",
                     "options": [
                       {
-                        "value": true,
+                        "value": false,
                         "label": "C-kg/hr"
                       },
                       {
-                        "value": false,
+                        "value": true,
                         "label": "F-lb/h"
                       }
                     ]
