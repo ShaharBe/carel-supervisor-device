@@ -603,6 +603,7 @@
                     "index": 146,
                     "access": "R/W"
                   },
+                  "quantity": "hours",
                   "range_or_options": "hours",
                   "note": null,
                   "is_caption": false,
@@ -825,6 +826,7 @@
                     "index": 148,
                     "access": "R/W"
                   },
+                  "quantity": "days",
                   "range_or_options": "days",
                   "note": null,
                   "is_caption": false,

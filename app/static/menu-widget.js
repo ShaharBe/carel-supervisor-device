@@ -19,13 +19,15 @@ window.CarelMenuWidget = (() => {
       temperature: '\u00B0C',
       production_rate: 'kg/h',
       percent: '%',
-      hours: 'h'
+      hours: 'h',
+      days: 'd'
     },
     imperial: {
       temperature: '\u00B0F',
       production_rate: 'lb/h',
       percent: '%',
-      hours: 'h'
+      hours: 'h',
+      days: 'd'
     }
   };
   let menuEditState = {
@@ -238,7 +240,7 @@ window.CarelMenuWidget = (() => {
       return valueText;
     }
 
-    const compactUnits = new Set(['%', 'h']);
+    const compactUnits = new Set(['%', 'h', 'd']);
     return compactUnits.has(unit) ? valueText + unit : valueText + ' ' + unit;
   }
 
