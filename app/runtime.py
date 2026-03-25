@@ -615,7 +615,7 @@ def poll_registers_once() -> None:
     try:
         with modbus_lock:
             modbus_connect_or_raise()
-            humidifier_status_rr = read_input_registers(address=HUMIDIFIER_STATUS_ADDR, count=1)
+            humidifier_status_rr = read_holding_registers(address=HUMIDIFIER_STATUS_ADDR, count=1)
 
         if humidifier_status_rr.isError():
             raise RuntimeError(f"Modbus read error (humidifier status): {humidifier_status_rr}")

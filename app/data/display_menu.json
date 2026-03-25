@@ -1076,10 +1076,27 @@
                   "path": "3.3.1.1",
                   "title": "Manual procedure",
                   "display_label": "Manual procedure",
-                  "raw_text": "Manual procedure [yes,no]",
+                  "raw_text": "Manual procedure (I,136,R/W) [yes,no]",
                   "kind": "leaf",
                   "children": [],
-                  "register": null,
+                  "register": {
+                    "family": "I",
+                    "index": 136,
+                    "access": "R/W"
+                  },
+                  "editor": {
+                    "type": "enum",
+                    "options": [
+                      {
+                        "value": 6,
+                        "label": "yes"
+                      },
+                      {
+                        "value": 1,
+                        "label": "no"
+                      }
+                    ]
+                  },
                   "range_or_options": "yes,no",
                   "note": null,
                   "is_caption": false,

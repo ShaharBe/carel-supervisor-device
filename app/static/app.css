@@ -19,6 +19,9 @@
       min-height: 32px;
       color: #1f1f1f;
     }
+    .top-item-full {
+      width: 100%;
+    }
     .compact-action-row {
       display: flex;
       align-items: center;
@@ -453,6 +456,7 @@
       .inline-row { align-items: flex-start; }
       .top-strip { gap: 8px 14px; }
       .top-item { min-height: auto; }
+      .top-item-full { width: 100%; }
       .compact-action-row label { width: auto; margin-bottom: 0; }
       .menu-widget {
         width: 100%;

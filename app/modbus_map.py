@@ -77,7 +77,7 @@ TEMP_ADDR = qmm_to_modbus_addr(TEMP_REG)
 SETPOINT_ADDR = qmm_to_modbus_addr(SETPOINT_REG)
 MAX_PRODUCTION_ADDR = qmm_to_modbus_addr(MAX_PRODUCTION_REG)
 PROP_BAND_ADDR = qmm_to_modbus_addr(PROP_BAND_REG)
-HUMIDIFIER_STATUS_ADDR = qmm_to_modbus_addr(HUMIDIFIER_STATUS_REG)
+HUMIDIFIER_STATUS_ADDR = HUMIDIFIER_STATUS_REG
 
 RTC_READ_ADDRS = {
     "hour": qmm_to_modbus_addr(RTC_READ_HOUR_REG),

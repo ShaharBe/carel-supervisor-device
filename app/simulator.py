@@ -69,9 +69,9 @@ class SimulatorClient:
         self._holding_registers[MAX_PRODUCTION_ADDR] = 1000
         self._holding_registers[SETPOINT_ADDR] = 280
         self._holding_registers[PROP_BAND_ADDR] = 20
+        self._holding_registers[HUMIDIFIER_STATUS_ADDR] = 0
 
         self._set_device_rtc(datetime.now())
-        self._input_registers[HUMIDIFIER_STATUS_ADDR] = 0
         self._coils[ALARM_CATALOG.summary.address] = False
         self._coils[ALARM_RESET_COIL] = False
         self._coils[HUMIDIFIER_REMOTE_ONOFF_COIL] = True
@@ -227,7 +227,7 @@ class SimulatorClient:
 
         self._coils[address] = bool(value)
         if address == HUMIDIFIER_REMOTE_ONOFF_COIL:
-            self._input_registers[HUMIDIFIER_STATUS_ADDR] = 0 if bool(value) else 2
+            self._holding_registers[HUMIDIFIER_STATUS_ADDR] = 0 if bool(value) else 2
         if address == ALARM_RESET_COIL and value:
             self._clear_alarm_coils()
         print(f"[SIMULATOR] Write coil {address} = {bool(value)}")

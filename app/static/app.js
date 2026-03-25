@@ -9,14 +9,14 @@
   let refreshQueued = false;
 
   const humidifierStatusMap = {
-    0: 'On duty',
-    1: 'Alarm(s) present',
-    2: 'Disabled via network',
-    3: 'Disabled by timer',
-    4: 'Disabled by remote on/off',
-    5: 'Disabled by keyboard',
-    6: 'Manual control',
-    7: 'No demand'
+    0: 'on duty',
+    1: 'alarm(s) present',
+    2: 'disabled via network',
+    3: 'disabled by timer',
+    4: 'disabled by remote on/off',
+    5: 'disabled by keyboard',
+    6: 'manual control',
+    7: 'no demand'
   };
 
   const phaseMap = {
@@ -214,11 +214,15 @@
 
   function renderInfo(info) {
     if (!info) {
+      document.getElementById('topHumidifierStatus').textContent = '\u2014';
       return;
     }
 
-    document.getElementById('infoHumStatus').textContent =
+    const humidifierStatusText =
       humidifierStatusMap[info.humidifier_status] ?? info.humidifier_status ?? '\u2014';
+
+    document.getElementById('topHumidifierStatus').textContent = humidifierStatusText;
+    document.getElementById('infoHumStatus').textContent = humidifierStatusText;
     document.getElementById('infoConductivity').textContent = info.conductivity ?? '\u2014';
     document.getElementById('infoCyl1Phase').textContent = phaseMap[info.cyl1_phase] ?? info.cyl1_phase ?? '\u2014';
     document.getElementById('infoCyl1Status').textContent = statusMap[info.cyl1_status] ?? info.cyl1_status ?? '\u2014';
@@ -284,6 +288,7 @@
       document.getElementById('status').title = String(error);
       document.getElementById('temp').textContent = '\u2014';
       document.getElementById('deviceTime').textContent = '\u2014';
+      document.getElementById('topHumidifierStatus').textContent = '\u2014';
       setModbusIndicator('status-dot-dead');
       setAlarmBadge('alarm-pill-neutral', 'UI error');
       document.getElementById('alarmsEmpty').textContent = 'Unable to render alarms.';
