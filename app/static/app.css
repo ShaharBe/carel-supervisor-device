@@ -422,8 +422,27 @@
 
     /* Phone layout (max-width 600px) */
     @media (max-width: 600px) {
-      body { margin: 12px; }
-      .card { max-width: 100%; padding: 14px; border-radius: 8px; }
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        overflow-x: auto;
+      }
+      h2 {
+        font-size: 1.4em;
+        padding: 12px 14px 0;
+        margin: 0;
+      }
+      .card {
+        width: 100%;
+        max-width: none;
+        box-sizing: border-box;
+        margin: 0;
+        padding: 14px;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+      }
       .row { margin: 14px 0; }
       label { display: block; width: 100%; margin-bottom: 6px; font-weight: 500; }
       input { width: calc(100% - 80px); padding: 10px 12px; font-size: 16px; /* prevents iOS zoom */ }
@@ -434,6 +453,17 @@
       .top-strip { gap: 8px 14px; }
       .top-item { min-height: auto; }
       .compact-action-row label { width: auto; margin-bottom: 0; }
+      .menu-widget {
+        width: 100%;
+        max-width: none;
+        box-sizing: border-box;
+        margin-left: 0;
+        margin-right: 0;
+        border-radius: 12px;
+      }
+      .lcd-shell {
+        padding: 8px;
+      }
       .menu-screen {
         height: 304px;
         --menu-font-size: 1.3rem;
@@ -462,7 +492,36 @@
       .modal { width: 100%; padding: 16px; }
       .modal-actions { flex-direction: column; }
       .modal .field input { width: 100%; }
-      h2 { font-size: 1.4em; }
       .alarms-panel { padding: 12px; }
       .footer-actions { align-items: stretch; }
+    }
+
+    @media (max-width: 900px) and (orientation: landscape) {
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        overflow-x: auto;
+      }
+      h2 {
+        padding: 10px 14px 0;
+        margin: 0;
+      }
+      .card {
+        width: 100%;
+        max-width: none;
+        box-sizing: border-box;
+        margin: 0;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+      }
+      .menu-widget {
+        width: 100%;
+        max-width: none;
+        box-sizing: border-box;
+      }
+      .menu-screen {
+        height: 272px;
+      }
     }
