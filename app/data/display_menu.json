@@ -1125,11 +1125,28 @@
                   "path": "3.3.1.3",
                   "title": "Fill valve",
                   "display_label": "Fill valve",
-                  "raw_text": "Fill valve [yes,no]",
+                  "raw_text": "Fill valve (D,54,R/W) [off,on]",
                   "kind": "leaf",
                   "children": [],
-                  "register": null,
-                  "range_or_options": "yes,no",
+                  "register": {
+                    "family": "D",
+                    "index": 54,
+                    "access": "R/W"
+                  },
+                  "editor": {
+                    "type": "boolean",
+                    "options": [
+                      {
+                        "value": false,
+                        "label": "off"
+                      },
+                      {
+                        "value": true,
+                        "label": "on"
+                      }
+                    ]
+                  },
+                  "range_or_options": "off,on",
                   "note": null,
                   "is_caption": false,
                   "is_stub": false,
