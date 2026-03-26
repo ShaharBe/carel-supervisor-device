@@ -1139,10 +1139,14 @@
                   "path": "3.3.1.4",
                   "title": "Drain pump",
                   "display_label": "Drain pump",
-                  "raw_text": "Drain pump [yes,no]",
+                  "raw_text": "Drain pump (D,52,R/W) [yes,no]",
                   "kind": "leaf",
                   "children": [],
-                  "register": null,
+                  "register": {
+                    "family": "D",
+                    "index": 52,
+                    "access": "R/W"
+                  },
                   "range_or_options": "yes,no",
                   "note": null,
                   "is_caption": false,

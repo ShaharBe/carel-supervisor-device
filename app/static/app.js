@@ -233,18 +233,6 @@
     document.getElementById('infoVoltage').textContent = voltMap[info.voltage_type] ?? info.voltage_type ?? '\u2014';
     document.getElementById('infoError').textContent = info.error || '';
     document.getElementById('infoError').className = info.error ? 'muted err' : 'muted';
-
-    const drainBtn = document.getElementById('drainCyl1Btn');
-    if (info.cyl1_drain_on === true) {
-      drainBtn.textContent = 'ON';
-      drainBtn.style.background = '#ffcccc';
-    } else if (info.cyl1_drain_on === false) {
-      drainBtn.textContent = 'OFF';
-      drainBtn.style.background = '';
-    } else {
-      drainBtn.textContent = '\u2014';
-      drainBtn.style.background = '';
-    }
   }
 
   async function performRefresh() {
@@ -408,20 +396,6 @@
   document.getElementById('rtcModalBackdrop').addEventListener('click', (event) => {
     if (event.target.id === 'rtcModalBackdrop') {
       closeRtcModal();
-    }
-  });
-  document.getElementById('drainCyl1Btn').addEventListener('click', async () => {
-    const button = document.getElementById('drainCyl1Btn');
-    button.disabled = true;
-    try {
-      const response = await fetch('api/cyl1-drain', { method: 'POST' });
-      const payload = await response.json();
-      if (!payload.ok) {
-        alert('Toggle failed: ' + (payload.error || 'unknown'));
-      }
-    } finally {
-      button.disabled = false;
-      await refresh();
     }
   });
   document.getElementById('rebootBtn').addEventListener('click', rebootDevice);
