@@ -395,7 +395,8 @@
                     "index": 2,
                     "access": "R/W"
                   },
-                  "range_or_options": null,
+                  "quantity": "percent",
+                  "range_or_options": "0...250",
                   "note": null,
                   "is_caption": false,
                   "is_stub": false,
@@ -413,7 +414,8 @@
                     "index": 3,
                     "access": "R/W"
                   },
-                  "range_or_options": null,
+                  "quantity": "percent",
+                  "range_or_options": "0...250",
                   "note": null,
                   "is_caption": false,
                   "is_stub": false,
@@ -473,7 +475,8 @@
                     "operator": "in",
                     "values": [2, 4]
                   },
-                  "range_or_options": null,
+                  "quantity": "percent",
+                  "range_or_options": "0...250",
                   "note": null,
                   "is_caption": false,
                   "is_stub": false,
@@ -496,7 +499,8 @@
                     "operator": "in",
                     "values": [2, 4]
                   },
-                  "range_or_options": null,
+                  "quantity": "percent",
+                  "range_or_options": "0...250",
                   "note": null,
                   "is_caption": false,
                   "is_stub": false,
