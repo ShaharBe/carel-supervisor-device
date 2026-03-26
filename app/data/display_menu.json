@@ -1422,6 +1422,10 @@
             "index": 11,
             "access": "R"
           },
+          "editor": {
+            "type": "float",
+            "scale": 10
+          },
           "quantity": "amps",
           "range_or_options": null,
           "note": null,
@@ -1685,6 +1689,10 @@
             "family": "A",
             "index": 12,
             "access": "R"
+          },
+          "editor": {
+            "type": "float",
+            "scale": 10
           },
           "quantity": "amps",
           "range_or_options": null,
