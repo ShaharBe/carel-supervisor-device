@@ -1156,7 +1156,7 @@
                   "path": "3.3.1.4",
                   "title": "Drain pump",
                   "display_label": "Drain pump",
-                  "raw_text": "Drain pump (D,52,R/W) [yes,no]",
+                  "raw_text": "Drain pump (D,52,R/W) [off,on]",
                   "kind": "leaf",
                   "children": [],
                   "register": {
@@ -1164,7 +1164,20 @@
                     "index": 52,
                     "access": "R/W"
                   },
-                  "range_or_options": "yes,no",
+                  "editor": {
+                    "type": "boolean",
+                    "options": [
+                      {
+                        "value": false,
+                        "label": "off"
+                      },
+                      {
+                        "value": true,
+                        "label": "on"
+                      }
+                    ]
+                  },
+                  "range_or_options": "off,on",
                   "note": null,
                   "is_caption": false,
                   "is_stub": false,
@@ -1188,11 +1201,28 @@
                   "path": "3.3.1.6",
                   "title": "Dehumidifier",
                   "display_label": "Dehumidifier",
-                  "raw_text": "Dehumidifier [yes,no]",
+                  "raw_text": "Dehumidifier (D,45,R/W) [off,on]",
                   "kind": "leaf",
                   "children": [],
-                  "register": null,
-                  "range_or_options": "yes,no",
+                  "register": {
+                    "family": "D",
+                    "index": 45,
+                    "access": "R/W"
+                  },
+                  "editor": {
+                    "type": "boolean",
+                    "options": [
+                      {
+                        "value": false,
+                        "label": "off"
+                      },
+                      {
+                        "value": true,
+                        "label": "on"
+                      }
+                    ]
+                  },
+                  "range_or_options": "off,on",
                   "note": null,
                   "is_caption": false,
                   "is_stub": false,
