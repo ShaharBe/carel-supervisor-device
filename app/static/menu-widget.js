@@ -702,27 +702,27 @@ window.CarelMenuWidget = (() => {
     }
 
     if (payload.info?.humidifier_status !== null && payload.info?.humidifier_status !== undefined) {
-      menuValueStore.set('4.1.1', payload.info.humidifier_status);
+      menuValueStore.set('4.1', payload.info.humidifier_status);
     }
 
     if (payload.info?.conductivity !== null && payload.info?.conductivity !== undefined) {
-      menuValueStore.set('4.1.6', payload.info.conductivity);
+      menuValueStore.set('4.6', payload.info.conductivity);
     }
 
     if (payload.info?.cyl1_hours !== null && payload.info?.cyl1_hours !== undefined) {
-      menuValueStore.set('4.2.2', payload.info.cyl1_hours);
+      menuValueStore.set('5.2', payload.info.cyl1_hours);
     }
 
     if (payload.device_time_display) {
-      menuValueStore.set('4.2.4', payload.device_time_display);
+      menuValueStore.set('5.4', payload.device_time_display);
     }
 
     if (payload.info?.cyl1_status !== null && payload.info?.cyl1_status !== undefined) {
-      menuValueStore.set('4.3.2', payload.info.cyl1_status);
+      menuValueStore.set('6.2', payload.info.cyl1_status);
     }
 
     if (payload.info?.cyl1_phase !== null && payload.info?.cyl1_phase !== undefined) {
-      menuValueStore.set('4.3.3', payload.info.cyl1_phase);
+      menuValueStore.set('6.3', payload.info.cyl1_phase);
     }
   }
 

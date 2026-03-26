@@ -1350,408 +1350,137 @@
       "page_direction": null
     },
     {
-          "path": "4",
-          "title": "Info",
-          "display_label": "Info",
-          "raw_text": "Info",
-          "kind": "menu",
-          "children": [
-            {
-              "path": "4.1",
-              "title": "Info (1/3)",
-              "display_label": "Info (1/3)",
-              "raw_text": "Info (1/3)",
-              "kind": "menu",
-              "page_group": "info_pages",
-              "page_index": 1,
-              "page_count": 3,
-              "visible": true,
-              "children": [
-                {
-                  "path": "4.1.1",
-                  "title": "Status",
-                  "display_label": "Status",
-                  "raw_text": "Status (I,136,R)",
-                  "kind": "leaf",
-                  "children": [],
-                  "register": {
-                    "family": "I",
-                    "index": 136,
-                    "access": "R"
-                  },
-                  "editor": {
-                    "type": "enum",
-                    "options": [
-                      { "value": 0, "label": "on duty" },
-                      { "value": 1, "label": "alarm(s) present" },
-                      { "value": 2, "label": "disabled via network" },
-                      { "value": 3, "label": "disabled by timer" },
-                      { "value": 4, "label": "disabled by remote on/off" },
-                      { "value": 5, "label": "disabled by keyboard" },
-                      { "value": 6, "label": "manual control" },
-                      { "value": 7, "label": "no demand" }
-                    ]
-                  },
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": false,
-                  "page_direction": null
-                },
-                {
-                  "path": "4.1.2",
-                  "title": "Steam Prod.",
-                  "display_label": "Steam Prod.",
-                  "raw_text": "Steam Prod. (A,5,R)",
-                  "kind": "leaf",
-                  "children": [],
-                  "register": {
-                    "family": "A",
-                    "index": 5,
-                    "access": "R"
-                  },
-                  "quantity": "production_rate",
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": false,
-                  "page_direction": null
-                },
-                {
-                  "path": "4.1.3",
-                  "title": "Current",
-                  "display_label": "Current",
-                  "raw_text": "Current (A,11,R)",
-                  "kind": "leaf",
-                  "children": [],
-                  "register": {
-                    "family": "A",
-                    "index": 11,
-                    "access": "R"
-                  },
-                  "quantity": "amps",
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": false,
-                  "page_direction": null
-                },
-                {
-                  "path": "4.1.4",
-                  "title": "Dehumidifier",
-                  "display_label": "Dehumidifier",
-                  "raw_text": "Dehumidifier [off,on] (TBD)",
-                  "kind": "stub",
-                  "children": [],
-                  "register": null,
-                  "range_or_options": "off,on",
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": true,
-                  "page_direction": null
-                },
-                {
-                  "path": "4.1.5",
-                  "title": "Alarm Relay",
-                  "display_label": "Alarm Relay",
-                  "raw_text": "Alarm Relay (D,9,R) [off,on]",
-                  "kind": "leaf",
-                  "children": [],
-                  "register": {
-                    "family": "D",
-                    "index": 9,
-                    "access": "R"
-                  },
-                  "editor": {
-                    "type": "boolean",
-                    "options": [
-                      { "value": false, "label": "off" },
-                      { "value": true, "label": "on" }
-                    ]
-                  },
-                  "range_or_options": "off,on",
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": false,
-                  "page_direction": null
-                },
-                {
-                  "path": "4.1.6",
-                  "title": "Conductivity",
-                  "display_label": "Conductivity",
-                  "raw_text": "Conductivity (I,137,R)",
-                  "kind": "leaf",
-                  "children": [],
-                  "register": {
-                    "family": "I",
-                    "index": 137,
-                    "access": "R"
-                  },
-                  "quantity": "conductivity",
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": false,
-                  "page_direction": null
-                }
-              ],
-              "register": null,
-              "range_or_options": null,
-              "note": null,
-              "is_caption": false,
-              "is_stub": false,
-              "page_direction": null
-            },
-            {
-              "path": "4.2",
-              "title": "Time counters (2/3)",
-              "display_label": "Time counters (2/3)",
-              "raw_text": "Time counters (2/3)",
-              "kind": "menu",
-              "page_group": "info_pages",
-              "page_index": 2,
-              "page_count": 3,
-              "visible": true,
-              "children": [
-                {
-                  "path": "4.2.1",
-                  "title": "Total life",
-                  "display_label": "Total life",
-                  "raw_text": "Total life [hours] (TBD)",
-                  "kind": "stub",
-                  "children": [],
-                  "register": null,
-                  "range_or_options": "hours",
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": true,
-                  "page_direction": null
-                },
-                {
-                  "path": "4.2.2",
-                  "title": "Cylinder Operating hours",
-                  "display_label": "Cylinder Operating hours",
-                  "raw_text": "Cylinder Operating hours (I,165,R) [hours]",
-                  "kind": "leaf",
-                  "children": [],
-                  "register": {
-                    "family": "I",
-                    "index": 165,
-                    "access": "R"
-                  },
-                  "quantity": "hours",
-                  "range_or_options": "hours",
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": false,
-                  "page_direction": null
-                },
-                {
-                  "path": "4.2.3",
-                  "title": "Scheduled operat.",
-                  "display_label": "Scheduled operat.",
-                  "raw_text": "Scheduled operat. [yes,no] (TBD)",
-                  "kind": "stub",
-                  "children": [],
-                  "register": null,
-                  "range_or_options": "yes,no",
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": true,
-                  "page_direction": null
-                },
-                {
-                  "path": "4.2.4",
-                  "title": "Date / time",
-                  "display_label": "Date / time",
-                  "raw_text": "Date / time (same value as the main dashboard clock)",
-                  "kind": "leaf",
-                  "children": [],
-                  "register": null,
-                  "range_or_options": null,
-                  "note": "Sourced from the main dashboard clock display.",
-                  "is_caption": false,
-                  "is_stub": false,
-                  "page_direction": null
-                }
-              ],
-              "register": null,
-              "range_or_options": null,
-              "note": null,
-              "is_caption": false,
-              "is_stub": false,
-              "page_direction": null
-            },
-            {
-              "path": "4.3",
-              "title": "Info cylinder (3/3)",
-              "display_label": "Info cylinder (3/3)",
-              "raw_text": "Info cylinder (3/3)",
-              "kind": "menu",
-              "page_group": "info_pages",
-              "page_index": 3,
-              "page_count": 3,
-              "visible": true,
-              "children": [
-                {
-                  "path": "4.3.1",
-                  "title": "Cyl. Prod.",
-                  "display_label": "Cyl. Prod.",
-                  "raw_text": "Cyl. Prod. (A,5,R)",
-                  "kind": "leaf",
-                  "children": [],
-                  "register": {
-                    "family": "A",
-                    "index": 5,
-                    "access": "R"
-                  },
-                  "quantity": "production_rate",
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": false,
-                  "page_direction": null
-                },
-                {
-                  "path": "4.3.2",
-                  "title": "Status",
-                  "display_label": "Status",
-                  "raw_text": "Status (I,140,R)",
-                  "kind": "leaf",
-                  "children": [],
-                  "register": {
-                    "family": "I",
-                    "index": 140,
-                    "access": "R"
-                  },
-                  "editor": {
-                    "type": "enum",
-                    "options": [
-                      { "value": 0, "label": "no production" },
-                      { "value": 1, "label": "start of evaporation cycle" },
-                      { "value": 2, "label": "water fill" },
-                      { "value": 3, "label": "steam production in progress" },
-                      { "value": 4, "label": "water drain (decision to open the contactor; drain pump still stopped)" },
-                      { "value": 5, "label": "water drain (drain pump running)" },
-                      { "value": 6, "label": "water drain (drain pump stopped; contactor closing, if open)" },
-                      { "value": 7, "label": "humidifier blocked" },
-                      { "value": 8, "label": "long-term inactivity full drain" },
-                      { "value": 9, "label": "flushing of the hydraulic circuit" },
-                      { "value": 10, "label": "full drain by manual or network request" },
-                      { "value": 11, "label": "automatic management of lack of supply water" },
-                      { "value": 12, "label": "total periodic drain" }
-                    ]
-                  },
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": false,
-                  "page_direction": null
-                },
-                {
-                  "path": "4.3.3",
-                  "title": "Activity",
-                  "display_label": "Activity",
-                  "raw_text": "Activity (I,139,R)",
-                  "kind": "leaf",
-                  "children": [],
-                  "register": {
-                    "family": "I",
-                    "index": 139,
-                    "access": "R"
-                  },
-                  "editor": {
-                    "type": "enum",
-                    "options": [
-                      { "value": 0, "label": "not active" },
-                      { "value": 1, "label": "softstart" },
-                      { "value": 2, "label": "start" },
-                      { "value": 3, "label": "production at steady state" },
-                      { "value": 4, "label": "reduced production" },
-                      { "value": 5, "label": "production delayed stop" },
-                      { "value": 6, "label": "full flush" },
-                      { "value": 7, "label": "Fast Start" },
-                      { "value": 8, "label": "Fast Start_FT (Foam Test)" },
-                      { "value": 9, "label": "Fast Start_HW (Heating Water - waiting to boil)" }
-                    ]
-                  },
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": false,
-                  "page_direction": null
-                },
-                {
-                  "path": "4.3.4",
-                  "title": "Current",
-                  "display_label": "Current",
-                  "raw_text": "Current (A,12,R)",
-                  "kind": "leaf",
-                  "children": [],
-                  "register": {
-                    "family": "A",
-                    "index": 12,
-                    "access": "R"
-                  },
-                  "quantity": "amps",
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": false,
-                  "page_direction": null
-                },
-                {
-                  "path": "4.3.5",
-                  "title": "Power contactor",
-                  "display_label": "Power contactor",
-                  "raw_text": "Power contactor (TBD)",
-                  "kind": "stub",
-                  "children": [],
-                  "register": null,
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": true,
-                  "page_direction": null
-                },
-                {
-                  "path": "4.3.6",
-                  "title": "Fill valve",
-                  "display_label": "Fill valve",
-                  "raw_text": "Fill valve (TBD)",
-                  "kind": "stub",
-                  "children": [],
-                  "register": null,
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": true,
-                  "page_direction": null
-                },
-                {
-                  "path": "4.3.7",
-                  "title": "Drain pumps",
-                  "display_label": "Drain pumps",
-                  "raw_text": "Drain pumps (TBD)",
-                  "kind": "stub",
-                  "children": [],
-                  "register": null,
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": false,
-                  "is_stub": true,
-                  "page_direction": null
-                }
-              ],
-              "register": null,
-              "range_or_options": null,
-              "note": null,
-              "is_caption": false,
-              "is_stub": false,
-              "page_direction": null
-            }
-          ],
+      "path": "4",
+      "title": "Info (1/3)",
+      "display_label": "Info (1/3)",
+      "raw_text": "Info (1/3)",
+      "kind": "menu",
+      "page_group": "info_pages",
+      "page_index": 1,
+      "page_count": 3,
+      "visible": true,
+      "children": [
+        {
+          "path": "4.1",
+          "title": "Status",
+          "display_label": "Status",
+          "raw_text": "Status (I,136,R)",
+          "kind": "leaf",
+          "children": [],
+          "register": {
+            "family": "I",
+            "index": 136,
+            "access": "R"
+          },
+          "editor": {
+            "type": "enum",
+            "options": [
+              { "value": 0, "label": "on duty" },
+              { "value": 1, "label": "alarm(s) present" },
+              { "value": 2, "label": "disabled via network" },
+              { "value": 3, "label": "disabled by timer" },
+              { "value": 4, "label": "disabled by remote on/off" },
+              { "value": 5, "label": "disabled by keyboard" },
+              { "value": 6, "label": "manual control" },
+              { "value": 7, "label": "no demand" }
+            ]
+          },
+          "range_or_options": null,
+          "note": null,
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        },
+        {
+          "path": "4.2",
+          "title": "Steam Prod.",
+          "display_label": "Steam Prod.",
+          "raw_text": "Steam Prod. (A,5,R)",
+          "kind": "leaf",
+          "children": [],
+          "register": {
+            "family": "A",
+            "index": 5,
+            "access": "R"
+          },
+          "quantity": "production_rate",
+          "range_or_options": null,
+          "note": null,
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        },
+        {
+          "path": "4.3",
+          "title": "Current",
+          "display_label": "Current",
+          "raw_text": "Current (A,11,R)",
+          "kind": "leaf",
+          "children": [],
+          "register": {
+            "family": "A",
+            "index": 11,
+            "access": "R"
+          },
+          "quantity": "amps",
+          "range_or_options": null,
+          "note": null,
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        },
+        {
+          "path": "4.4",
+          "title": "Dehumidifier",
+          "display_label": "Dehumidifier",
+          "raw_text": "Dehumidifier [off,on] (TBD)",
+          "kind": "stub",
+          "children": [],
           "register": null,
+          "range_or_options": "off,on",
+          "note": null,
+          "is_caption": false,
+          "is_stub": true,
+          "page_direction": null
+        },
+        {
+          "path": "4.5",
+          "title": "Alarm Relay",
+          "display_label": "Alarm Relay",
+          "raw_text": "Alarm Relay (D,9,R) [off,on]",
+          "kind": "leaf",
+          "children": [],
+          "register": {
+            "family": "D",
+            "index": 9,
+            "access": "R"
+          },
+          "editor": {
+            "type": "boolean",
+            "options": [
+              { "value": false, "label": "off" },
+              { "value": true, "label": "on" }
+            ]
+          },
+          "range_or_options": "off,on",
+          "note": null,
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        },
+        {
+          "path": "4.6",
+          "title": "Conductivity",
+          "display_label": "Conductivity",
+          "raw_text": "Conductivity (I,137,R)",
+          "kind": "leaf",
+          "children": [],
+          "register": {
+            "family": "I",
+            "index": 137,
+            "access": "R"
+          },
+          "quantity": "conductivity",
           "range_or_options": null,
           "note": null,
           "is_caption": false,
@@ -1765,4 +1494,260 @@
       "is_caption": false,
       "is_stub": false,
       "page_direction": null
+    },
+    {
+      "path": "5",
+      "title": "Time counters (2/3)",
+      "display_label": "Time counters (2/3)",
+      "raw_text": "Time counters (2/3)",
+      "kind": "menu",
+      "page_group": "info_pages",
+      "page_index": 2,
+      "page_count": 3,
+      "visible": true,
+      "children": [
+        {
+          "path": "5.1",
+          "title": "Total life",
+          "display_label": "Total life",
+          "raw_text": "Total life [hours] (TBD)",
+          "kind": "stub",
+          "children": [],
+          "register": null,
+          "range_or_options": "hours",
+          "note": null,
+          "is_caption": false,
+          "is_stub": true,
+          "page_direction": null
+        },
+        {
+          "path": "5.2",
+          "title": "Cylinder Operating hours",
+          "display_label": "Cylinder Operating hours",
+          "raw_text": "Cylinder Operating hours (I,165,R) [hours]",
+          "kind": "leaf",
+          "children": [],
+          "register": {
+            "family": "I",
+            "index": 165,
+            "access": "R"
+          },
+          "quantity": "hours",
+          "range_or_options": "hours",
+          "note": null,
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        },
+        {
+          "path": "5.3",
+          "title": "Scheduled operat.",
+          "display_label": "Scheduled operat.",
+          "raw_text": "Scheduled operat. [yes,no] (TBD)",
+          "kind": "stub",
+          "children": [],
+          "register": null,
+          "range_or_options": "yes,no",
+          "note": null,
+          "is_caption": false,
+          "is_stub": true,
+          "page_direction": null
+        },
+        {
+          "path": "5.4",
+          "title": "Date / time",
+          "display_label": "Date / time",
+          "raw_text": "Date / time (same value as the main dashboard clock)",
+          "kind": "leaf",
+          "children": [],
+          "register": null,
+          "range_or_options": null,
+          "note": "Sourced from the main dashboard clock display.",
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        }
+      ],
+      "register": null,
+      "range_or_options": null,
+      "note": null,
+      "is_caption": false,
+      "is_stub": false,
+      "page_direction": null
+    },
+    {
+      "path": "6",
+      "title": "Info cylinder (3/3)",
+      "display_label": "Info cylinder (3/3)",
+      "raw_text": "Info cylinder (3/3)",
+      "kind": "menu",
+      "page_group": "info_pages",
+      "page_index": 3,
+      "page_count": 3,
+      "visible": true,
+      "children": [
+        {
+          "path": "6.1",
+          "title": "Cyl. Prod.",
+          "display_label": "Cyl. Prod.",
+          "raw_text": "Cyl. Prod. (A,5,R)",
+          "kind": "leaf",
+          "children": [],
+          "register": {
+            "family": "A",
+            "index": 5,
+            "access": "R"
+          },
+          "quantity": "production_rate",
+          "range_or_options": null,
+          "note": null,
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        },
+        {
+          "path": "6.2",
+          "title": "Status",
+          "display_label": "Status",
+          "raw_text": "Status (I,140,R)",
+          "kind": "leaf",
+          "children": [],
+          "register": {
+            "family": "I",
+            "index": 140,
+            "access": "R"
+          },
+          "editor": {
+            "type": "enum",
+            "options": [
+              { "value": 0, "label": "no production" },
+              { "value": 1, "label": "start of evaporation cycle" },
+              { "value": 2, "label": "water fill" },
+              { "value": 3, "label": "steam production in progress" },
+              { "value": 4, "label": "water drain (decision to open the contactor; drain pump still stopped)" },
+              { "value": 5, "label": "water drain (drain pump running)" },
+              { "value": 6, "label": "water drain (drain pump stopped; contactor closing, if open)" },
+              { "value": 7, "label": "humidifier blocked" },
+              { "value": 8, "label": "long-term inactivity full drain" },
+              { "value": 9, "label": "flushing of the hydraulic circuit" },
+              { "value": 10, "label": "full drain by manual or network request" },
+              { "value": 11, "label": "automatic management of lack of supply water" },
+              { "value": 12, "label": "total periodic drain" }
+            ]
+          },
+          "range_or_options": null,
+          "note": null,
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        },
+        {
+          "path": "6.3",
+          "title": "Activity",
+          "display_label": "Activity",
+          "raw_text": "Activity (I,139,R)",
+          "kind": "leaf",
+          "children": [],
+          "register": {
+            "family": "I",
+            "index": 139,
+            "access": "R"
+          },
+          "editor": {
+            "type": "enum",
+            "options": [
+              { "value": 0, "label": "not active" },
+              { "value": 1, "label": "softstart" },
+              { "value": 2, "label": "start" },
+              { "value": 3, "label": "production at steady state" },
+              { "value": 4, "label": "reduced production" },
+              { "value": 5, "label": "production delayed stop" },
+              { "value": 6, "label": "full flush" },
+              { "value": 7, "label": "Fast Start" },
+              { "value": 8, "label": "Fast Start_FT (Foam Test)" },
+              { "value": 9, "label": "Fast Start_HW (Heating Water - waiting to boil)" }
+            ]
+          },
+          "range_or_options": null,
+          "note": null,
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        },
+        {
+          "path": "6.4",
+          "title": "Current",
+          "display_label": "Current",
+          "raw_text": "Current (A,12,R)",
+          "kind": "leaf",
+          "children": [],
+          "register": {
+            "family": "A",
+            "index": 12,
+            "access": "R"
+          },
+          "quantity": "amps",
+          "range_or_options": null,
+          "note": null,
+          "is_caption": false,
+          "is_stub": false,
+          "page_direction": null
+        },
+        {
+          "path": "6.5",
+          "title": "Power contactor",
+          "display_label": "Power contactor",
+          "raw_text": "Power contactor (TBD)",
+          "kind": "stub",
+          "children": [],
+          "register": null,
+          "range_or_options": null,
+          "note": null,
+          "is_caption": false,
+          "is_stub": true,
+          "page_direction": null
+        },
+        {
+          "path": "6.6",
+          "title": "Fill valve",
+          "display_label": "Fill valve",
+          "raw_text": "Fill valve (TBD)",
+          "kind": "stub",
+          "children": [],
+          "register": null,
+          "range_or_options": null,
+          "note": null,
+          "is_caption": false,
+          "is_stub": true,
+          "page_direction": null
+        },
+        {
+          "path": "6.7",
+          "title": "Drain pumps",
+          "display_label": "Drain pumps",
+          "raw_text": "Drain pumps (TBD)",
+          "kind": "stub",
+          "children": [],
+          "register": null,
+          "range_or_options": null,
+          "note": null,
+          "is_caption": false,
+          "is_stub": true,
+          "page_direction": null
+        }
+      ],
+      "register": null,
+      "range_or_options": null,
+      "note": null,
+      "is_caption": false,
+      "is_stub": false,
+      "page_direction": null
     }
+  ],
+  "register": null,
+  "range_or_options": null,
+  "note": null,
+  "is_caption": false,
+  "is_stub": false,
+  "page_direction": null
+}
