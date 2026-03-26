@@ -14,23 +14,25 @@ window.CarelMenuWidget = (() => {
   let menuRuleDriverPaths = [];
   let lastMenuRuleDriverRefreshAt = 0;
   const menuRuleDriverRefreshIntervalMs = 5000;
-  const unitProfiles = {
-    metric: {
-      temperature: '\u00B0C',
-      production_rate: 'kg/h',
-      percent: '%',
-      hours: 'h',
-      days: 'd',
-      conductivity: 'uS/cm'
-    },
-    imperial: {
-      temperature: '\u00B0F',
-      production_rate: 'lb/h',
-      percent: '%',
-      hours: 'h',
-      days: 'd',
-      conductivity: 'uS/cm'
-    }
+    const unitProfiles = {
+      metric: {
+        temperature: '\u00B0C',
+        production_rate: 'kg/h',
+        amps: 'A',
+        percent: '%',
+        hours: 'h',
+        days: 'd',
+        conductivity: 'uS/cm'
+      },
+      imperial: {
+        temperature: '\u00B0F',
+        production_rate: 'lb/h',
+        amps: 'A',
+        percent: '%',
+        hours: 'h',
+        days: 'd',
+        conductivity: 'uS/cm'
+      }
   };
   let menuEditState = {
     open: false,
@@ -698,6 +700,30 @@ window.CarelMenuWidget = (() => {
     if (payload.prop_band_c !== null && payload.prop_band_c !== undefined) {
       menuValueStore.set('2.4', payload.prop_band_c);
     }
+
+    if (payload.info?.humidifier_status !== null && payload.info?.humidifier_status !== undefined) {
+      menuValueStore.set('4.1.1', payload.info.humidifier_status);
+    }
+
+    if (payload.info?.conductivity !== null && payload.info?.conductivity !== undefined) {
+      menuValueStore.set('4.1.6', payload.info.conductivity);
+    }
+
+    if (payload.info?.cyl1_hours !== null && payload.info?.cyl1_hours !== undefined) {
+      menuValueStore.set('4.2.2', payload.info.cyl1_hours);
+    }
+
+    if (payload.device_time_display) {
+      menuValueStore.set('4.2.4', payload.device_time_display);
+    }
+
+    if (payload.info?.cyl1_status !== null && payload.info?.cyl1_status !== undefined) {
+      menuValueStore.set('4.3.2', payload.info.cyl1_status);
+    }
+
+    if (payload.info?.cyl1_phase !== null && payload.info?.cyl1_phase !== undefined) {
+      menuValueStore.set('4.3.3', payload.info.cyl1_phase);
+    }
   }
 
   function formatMenuValue(node, value, editorOverride) {
@@ -738,13 +764,16 @@ window.CarelMenuWidget = (() => {
 
   function formatMenuLineValue(node) {
     const editor = getLeafEditor(node);
-    if (!editor) {
-      return '';
-    }
-
     const valueState = getMenuValueState(node.path);
     if (menuValueStore.has(node.path)) {
+      if (!editor) {
+        return String(menuValueStore.get(node.path));
+      }
       return formatMenuValue(node, menuValueStore.get(node.path), editor);
+    }
+
+    if (!editor) {
+      return '--';
     }
 
     if (valueState.loading) {
