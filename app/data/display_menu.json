@@ -1340,8 +1340,16 @@
           "is_caption": false,
           "is_stub": false,
           "page_direction": null
-        },
-        {
+        }
+      ],
+      "register": null,
+      "range_or_options": null,
+      "note": null,
+      "is_caption": false,
+      "is_stub": false,
+      "page_direction": null
+    },
+    {
           "path": "4",
           "title": "Info",
           "display_label": "Info",
@@ -1758,5 +1766,3 @@
       "is_stub": false,
       "page_direction": null
     }
-  ]
-}
