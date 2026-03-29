@@ -331,6 +331,12 @@
       grid-template-columns: minmax(0, 1fr) minmax(10ch, 48%);
     }
     .menu-line:hover { background: rgba(47, 72, 48, 0.1); }
+    .menu-line-static {
+      cursor: default;
+    }
+    .menu-line-static:hover {
+      background: transparent;
+    }
     .menu-line.is-active {
       background: #2f4830;
       color: #eef6e7;

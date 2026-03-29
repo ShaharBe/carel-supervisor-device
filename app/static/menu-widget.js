@@ -365,6 +365,14 @@ window.CarelMenuWidget = (() => {
     return node.display_label || node.title || node.path;
   }
 
+  function getCurrentMenuTitleText(node) {
+    if (!node || node.path === '') {
+      return '-- Main Menu --';
+    }
+
+    return getMenuNodeDisplayLabel(node);
+  }
+
   function getParentListMenuLabel(node) {
     if (!node) {
       return '';
@@ -972,6 +980,13 @@ window.CarelMenuWidget = (() => {
 
     const currentMenu = getMenuNode(menuCurrentPath);
     const children = getListedMenuChildren(currentMenu);
+    const titleRow = {
+      kind: 'caption',
+      title: getCurrentMenuTitleText(currentMenu),
+      display_label: getCurrentMenuTitleText(currentMenu),
+      raw_text: '(Generated) Current page title'
+    };
+    const displayRows = [titleRow, ...children];
     clampMenuSelection();
 
     path.textContent = buildMenuBreadcrumb(currentMenu);
@@ -981,7 +996,17 @@ window.CarelMenuWidget = (() => {
     screen.replaceChildren();
 
     if (children.length === 0) {
-      screen.style.gridTemplateRows = '1fr';
+      screen.style.gridTemplateRows = 'minmax(0, ' + menuRowWeight(titleRow) + 'fr) 1fr';
+      const header = document.createElement('div');
+      header.className = 'menu-line menu-line-caption menu-line-static';
+      header.setAttribute('role', 'presentation');
+
+      const headerLabel = document.createElement('span');
+      headerLabel.className = 'menu-line-label';
+      headerLabel.textContent = titleRow.display_label;
+      header.appendChild(headerLabel);
+      screen.appendChild(header);
+
       const empty = document.createElement('div');
       empty.className = 'menu-line-empty';
       empty.textContent = 'This menu is empty.';
@@ -991,7 +1016,17 @@ window.CarelMenuWidget = (() => {
       return;
     }
 
-    screen.style.gridTemplateRows = children.map((child) => 'minmax(0, ' + menuRowWeight(child) + 'fr)').join(' ');
+    screen.style.gridTemplateRows = displayRows.map((child) => 'minmax(0, ' + menuRowWeight(child) + 'fr)').join(' ');
+
+    const header = document.createElement('div');
+    header.className = 'menu-line menu-line-caption menu-line-static';
+    header.setAttribute('role', 'presentation');
+
+    const headerLabel = document.createElement('span');
+    headerLabel.className = 'menu-line-label';
+    headerLabel.textContent = titleRow.display_label;
+    header.appendChild(headerLabel);
+    screen.appendChild(header);
 
     children.forEach((child, actualIndex) => {
       const line = document.createElement('button');
