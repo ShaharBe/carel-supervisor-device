@@ -61,6 +61,7 @@
             "index": 14,
             "access": "R/W"
           },
+          "quantity": "percent",
           "range_or_options": "20...100",
           "note": null,
           "is_caption": false,
