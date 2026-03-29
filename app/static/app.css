@@ -260,13 +260,14 @@
       top: 8px;
       z-index: 2;
       min-width: 56px;
-      padding: 3px 8px;
+      padding: 6px 8px;
       border: 1px solid rgba(53, 72, 44, 0.7);
       border-radius: 999px;
       background: rgba(228, 239, 217, 0.94);
       color: #22301b;
       font-size: 0.78rem;
       line-height: 1;
+      opacity: 1;
       cursor: pointer;
       box-shadow: 0 1px 2px rgba(20, 28, 18, 0.18);
     }
@@ -504,7 +505,7 @@
       .menu-page-btn {
         top: 6px;
         min-width: 52px;
-        padding: 3px 7px;
+        padding: 6px 7px;
         font-size: 0.74rem;
       }
       .menu-page-btn-prev {

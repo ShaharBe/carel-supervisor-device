@@ -901,14 +901,15 @@ window.CarelMenuWidget = (() => {
     const prevButton = document.getElementById('menuPagePrevBtn');
     const nextButton = document.getElementById('menuPageNextBtn');
     const shell = document.querySelector('.lcd-shell');
+    const currentMenu = getMenuNode(menuCurrentPath);
     const pageTargets = getCurrentPageTargets();
-    const hasPageButtons = pageTargets.prev !== null || pageTargets.next !== null;
+    const inPageGroup = isPageGroupMenu(currentMenu);
 
-    prevButton.hidden = pageTargets.prev === null;
+    prevButton.hidden = !inPageGroup;
     prevButton.disabled = pageTargets.prev === null;
-    nextButton.hidden = pageTargets.next === null;
+    nextButton.hidden = !inPageGroup;
     nextButton.disabled = pageTargets.next === null;
-    shell?.classList.toggle('has-page-buttons', hasPageButtons);
+    shell?.classList.toggle('has-page-buttons', inPageGroup);
   }
 
   function findSelectableChildIndex(menuNode, preferredChildPath) {
