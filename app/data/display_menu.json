@@ -6,24 +6,6 @@
   "kind": "root",
   "children": [
     {
-      "path": "1",
-      "title": "Status Caption",
-      "display_label": "Status Caption",
-      "raw_text": "(Caption): [\"Off By Keyboard\", \"Off By Remote\"...] (I,136,R)",
-      "kind": "caption",
-      "children": [],
-      "register": {
-        "family": "I",
-        "index": 136,
-        "access": "R"
-      },
-      "range_or_options": "\"Off By Keyboard\", \"Off By Remote\"...",
-      "note": null,
-      "is_caption": true,
-      "is_stub": false,
-      "page_direction": null
-    },
-    {
       "path": "2",
       "title": "Set",
       "display_label": "Set",
