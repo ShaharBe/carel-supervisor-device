@@ -931,20 +931,6 @@
               "kind": "menu",
               "children": [
                 {
-                  "path": "3.2.7.0",
-                  "title": "Water Conductivity",
-                  "display_label": "Water Conductivity",
-                  "raw_text": "Water Conductivity",
-                  "kind": "caption",
-                  "children": [],
-                  "register": null,
-                  "range_or_options": null,
-                  "note": null,
-                  "is_caption": true,
-                  "is_stub": false,
-                  "page_direction": null
-                },
-                {
                   "path": "3.2.7.1",
                   "title": "Override conductivity reading",
                   "display_label": "Override conductivity reading",

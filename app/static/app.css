@@ -334,7 +334,7 @@
       cursor: pointer;
     }
     .menu-line-leaf {
-      grid-template-columns: minmax(0, 1fr) minmax(10ch, 48%);
+      grid-template-columns: minmax(0, 1fr) fit-content(35%);
     }
     .menu-line:hover { background: rgba(47, 72, 48, 0.1); }
     .menu-line-static {
