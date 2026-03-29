@@ -908,7 +908,6 @@ window.CarelMenuWidget = (() => {
     document.getElementById('menuHomeBtn').disabled = menuCurrentPath === '';
     const prevButton = document.getElementById('menuPagePrevBtn');
     const nextButton = document.getElementById('menuPageNextBtn');
-    const shell = document.querySelector('.lcd-shell');
     const currentMenu = getMenuNode(menuCurrentPath);
     const pageTargets = getCurrentPageTargets();
     const inPageGroup = isPageGroupMenu(currentMenu);
@@ -917,7 +916,6 @@ window.CarelMenuWidget = (() => {
     prevButton.disabled = pageTargets.prev === null;
     nextButton.hidden = !inPageGroup;
     nextButton.disabled = pageTargets.next === null;
-    shell?.classList.toggle('has-page-buttons', inPageGroup);
   }
 
   function findSelectableChildIndex(menuNode, preferredChildPath) {
