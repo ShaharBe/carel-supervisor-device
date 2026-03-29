@@ -390,54 +390,6 @@ window.CarelMenuWidget = (() => {
       .sort((left, right) => Number(left.page_index || 0) - Number(right.page_index || 0));
   }
 
-  function buildGeneratedPageLinks(node) {
-    if (!isPageGroupMenu(node)) {
-      return [];
-    }
-
-    const siblings = getPageGroupMenuSiblings(node);
-    const currentIndex = siblings.findIndex((child) => child.path === node.path);
-    if (currentIndex === -1) {
-      return [];
-    }
-
-    const links = [];
-    if (currentIndex > 0) {
-      links.push({
-        path: node.path + '::__prev_page__',
-        title: 'Prev page',
-        display_label: 'Prev page',
-        raw_text: '(Generated) Prev page',
-        kind: 'page_link',
-        children: [],
-        register: null,
-        range_or_options: null,
-        note: null,
-        is_caption: true,
-        is_stub: false,
-        page_direction: 'prev',
-      });
-    }
-    if (currentIndex < siblings.length - 1) {
-      links.push({
-        path: node.path + '::__next_page__',
-        title: 'Next page',
-        display_label: 'Next page',
-        raw_text: '(Generated) Next page',
-        kind: 'page_link',
-        children: [],
-        register: null,
-        range_or_options: null,
-        note: null,
-        is_caption: true,
-        is_stub: false,
-        page_direction: 'next',
-      });
-    }
-
-    return links;
-  }
-
   function isMenuNodeListedInParent(node) {
     if (!isMenuNodeVisible(node)) {
       return false;
@@ -451,8 +403,7 @@ window.CarelMenuWidget = (() => {
   }
 
   function getListedMenuChildren(node) {
-    const listedChildren = (node.children || []).filter((child) => isMenuNodeListedInParent(child));
-    return listedChildren.concat(buildGeneratedPageLinks(node));
+    return (node.children || []).filter((child) => isMenuNodeListedInParent(child));
   }
 
   function getCurrentMenuChildren() {
@@ -800,10 +751,6 @@ window.CarelMenuWidget = (() => {
       return 0.68;
     }
 
-    if (node.kind === 'page_link') {
-      return 0.72;
-    }
-
     return 1;
   }
 
@@ -951,6 +898,17 @@ window.CarelMenuWidget = (() => {
     const hasSelection = children.length > 0;
     document.getElementById('menuBackBtn').disabled = menuCurrentPath === '';
     document.getElementById('menuHomeBtn').disabled = menuCurrentPath === '';
+    const prevButton = document.getElementById('menuPagePrevBtn');
+    const nextButton = document.getElementById('menuPageNextBtn');
+    const shell = document.querySelector('.lcd-shell');
+    const pageTargets = getCurrentPageTargets();
+    const hasPageButtons = pageTargets.prev !== null || pageTargets.next !== null;
+
+    prevButton.hidden = pageTargets.prev === null;
+    prevButton.disabled = pageTargets.prev === null;
+    nextButton.hidden = pageTargets.next === null;
+    nextButton.disabled = pageTargets.next === null;
+    shell?.classList.toggle('has-page-buttons', hasPageButtons);
   }
 
   function findSelectableChildIndex(menuNode, preferredChildPath) {
@@ -1133,11 +1091,6 @@ window.CarelMenuWidget = (() => {
       return;
     }
 
-    if (selected.kind === 'page_link') {
-      openSiblingMenu(selected.page_direction);
-      return;
-    }
-
     renderMenuWidget();
   }
 
@@ -1152,6 +1105,24 @@ window.CarelMenuWidget = (() => {
 
   function goHomeInMenu() {
     navigateToMenu('');
+  }
+
+  function getCurrentPageTargets() {
+    const currentMenu = getMenuNode(menuCurrentPath);
+    if (!isPageGroupMenu(currentMenu)) {
+      return { prev: null, next: null };
+    }
+
+    const siblings = getPageGroupMenuSiblings(currentMenu);
+    const currentIndex = siblings.findIndex((child) => child.path === currentMenu.path);
+    if (currentIndex === -1) {
+      return { prev: null, next: null };
+    }
+
+    return {
+      prev: siblings[currentIndex - 1] || null,
+      next: siblings[currentIndex + 1] || null
+    };
   }
 
   function isChoiceButtonEditor(editor) {
@@ -1506,6 +1477,8 @@ window.CarelMenuWidget = (() => {
     });
     document.getElementById('menuBackBtn').addEventListener('click', goBackInMenu);
     document.getElementById('menuHomeBtn').addEventListener('click', goHomeInMenu);
+    document.getElementById('menuPagePrevBtn').addEventListener('click', () => openSiblingMenu('prev'));
+    document.getElementById('menuPageNextBtn').addEventListener('click', () => openSiblingMenu('next'));
     document.getElementById('menuFontSizeRange').addEventListener('input', (event) => {
       updateMenuDisplaySetting({ sizePercent: Number(event.target.value) });
     });
