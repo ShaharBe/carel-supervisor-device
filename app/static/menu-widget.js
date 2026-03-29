@@ -750,16 +750,12 @@ window.CarelMenuWidget = (() => {
     return '--';
   }
 
-  function menuRowWeight(node) {
-    if (!node) {
-      return 1;
+  function menuRowTrack(node) {
+    if (node?.kind === 'caption') {
+      return 'max-content';
     }
 
-    if (node.kind === 'caption') {
-      return 0.68;
-    }
-
-    return 1;
+    return 'minmax(0, 1fr)';
   }
 
   async function refreshVisibleMenuLeafValues(forceRefresh = true) {
@@ -994,7 +990,7 @@ window.CarelMenuWidget = (() => {
     screen.replaceChildren();
 
     if (children.length === 0) {
-      screen.style.gridTemplateRows = 'minmax(0, ' + menuRowWeight(titleRow) + 'fr) 1fr';
+      screen.style.gridTemplateRows = menuRowTrack(titleRow) + ' 1fr';
       const header = document.createElement('div');
       header.className = 'menu-line menu-line-caption menu-line-static';
       header.setAttribute('role', 'presentation');
@@ -1014,7 +1010,7 @@ window.CarelMenuWidget = (() => {
       return;
     }
 
-    screen.style.gridTemplateRows = displayRows.map((child) => 'minmax(0, ' + menuRowWeight(child) + 'fr)').join(' ');
+    screen.style.gridTemplateRows = displayRows.map((child) => menuRowTrack(child)).join(' ');
 
     const header = document.createElement('div');
     header.className = 'menu-line menu-line-caption menu-line-static';
