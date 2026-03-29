@@ -340,8 +340,7 @@
     .menu-line-caption {
       grid-template-columns: minmax(0, 1fr);
       justify-items: center;
-      padding-left: 4px;
-      padding-right: 4px;
+      padding: 0 4px;
     }
     .menu-line-caption .menu-line-label {
       width: auto;
@@ -350,7 +349,15 @@
       text-align: center;
       font-weight: 700;
       font-size: 1.3em;
+      line-height: 1;
       transform-origin: center center;
+    }
+    .menu-line-page_link {
+      padding: 0 6px;
+    }
+    .menu-line-page_link .menu-line-label,
+    .menu-line-page_link .menu-line-hint {
+      line-height: 1;
     }
     .menu-line-stub:not(.is-active),
     .menu-line-caption:not(.is-active) {

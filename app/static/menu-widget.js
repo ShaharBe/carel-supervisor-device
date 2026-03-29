@@ -791,6 +791,22 @@ window.CarelMenuWidget = (() => {
     return '--';
   }
 
+  function menuRowWeight(node) {
+    if (!node) {
+      return 1;
+    }
+
+    if (node.kind === 'caption') {
+      return 0.68;
+    }
+
+    if (node.kind === 'page_link') {
+      return 0.72;
+    }
+
+    return 1;
+  }
+
   async function refreshVisibleMenuLeafValues(forceRefresh = true) {
     const activeMenuPath = menuCurrentPath;
     const requestSequence = ++menuValueRequestSequence;
@@ -1016,7 +1032,7 @@ window.CarelMenuWidget = (() => {
       return;
     }
 
-    screen.style.gridTemplateRows = 'repeat(' + children.length + ', minmax(0, 1fr))';
+    screen.style.gridTemplateRows = children.map((child) => 'minmax(0, ' + menuRowWeight(child) + 'fr)').join(' ');
 
     children.forEach((child, actualIndex) => {
       const line = document.createElement('button');
