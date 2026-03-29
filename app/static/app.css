@@ -278,6 +278,9 @@
       opacity: 0.55;
       cursor: default;
     }
+    .menu-page-btn[hidden] {
+      display: none !important;
+    }
     .menu-page-btn-prev {
       left: 10px;
     }
