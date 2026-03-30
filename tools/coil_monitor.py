@@ -106,6 +106,11 @@ COIL_DEFS: Sequence[CoilDef] = (
     CoilDef(53, True, "cylinder 2: manual drain"),
     CoilDef(54, True, "cylinder 1: cleaning cycle"),
     CoilDef(55, True, "cylinder 2: cleaning cycle"),
+    CoilDef(71, True, "Power Contactor"), # Undocumented
+    CoilDef(72, True, "Fill Valve"), # Undocumented
+    CoilDef(73, True, "Drain Pump"), # Undocumented
+    CoilDef(74, True, "Alarm"), # Undocumented   
+    CoilDef(75, True, "Dehumidifier"), # Undocumented
     CoilDef(80, True, "enabling control supervisor"),
     CoilDef(81, True, "enabling ON-OFF from supervisor"),
 )

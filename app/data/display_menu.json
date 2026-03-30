@@ -881,7 +881,7 @@
                 {
                   "path": "3.2.6.3",
                   "title": "Cylinder flush",
-                  "display_label": "Cylinder flush",
+                  "display_label": "Additional periodic cylinder flush",
                   "raw_text": "Cylinder flush (D,44,R/W) [yes,no] \"total periodical flush\"",
                   "kind": "leaf",
                   "children": [],
