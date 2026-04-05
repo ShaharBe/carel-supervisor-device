@@ -6,10 +6,10 @@ This scanner probes configurable address windows and assumes the target device
 returns a Modbus error whenever an address does not exist on this model.
 
 By default it scans the full legal 0-based Modbus PDU address span for coils
-and holding registers: 0..65535. The default adaptive strategy first samples a
-few representative addresses in each window so valid regions are discovered
-early, then completes an exhaustive sweep so isolated valid addresses are still
-found.
+and holding registers: 0..65535. When run interactively in a terminal, the tool
+also lets you confirm or override the scan bounds before it starts. The scan is
+intentionally simple: it reads each address one by one so sparse maps do not
+pay the extra retry cost of block-read fallback logic.
 
 Usage (on Pi):
   # First stop the service to free the serial port
@@ -21,10 +21,6 @@ Usage (on Pi):
   # Restrict the scan to a smaller register window with verbose probe output
   /opt/carel-supervisor/venv/bin/python -u /opt/carel-supervisor/repo/tools/address_mapper.py \
       --mode registers --register-start 0 --register-end 511 --verbose
-
-  # Use the legacy exhaustive-only sweep
-  /opt/carel-supervisor/venv/bin/python -u /opt/carel-supervisor/repo/tools/address_mapper.py \
-      --strategy exhaustive --mode coils
 
 Environment:
   - Do not use USE_SIMULATOR=1 for this tool. The simulator returns default
@@ -42,9 +38,9 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, Iterable, Iterator, List, Sequence, Tuple
+from typing import Callable, Iterable, List, Sequence, Tuple
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -57,18 +53,13 @@ from client_factory import create_modbus_client, is_simulator_mode
 
 MODBUS_MIN_ADDRESS = 0
 MODBUS_MAX_ADDRESS = 65_535
-MODBUS_MAX_COIL_READ_COUNT = 2_000
-MODBUS_MAX_REGISTER_READ_COUNT = 125
 
 DEFAULT_COIL_START = MODBUS_MIN_ADDRESS
 DEFAULT_COIL_END = MODBUS_MAX_ADDRESS
 DEFAULT_REGISTER_START = MODBUS_MIN_ADDRESS
 DEFAULT_REGISTER_END = MODBUS_MAX_ADDRESS
-DEFAULT_MAX_BLOCK = 16
-DEFAULT_STRATEGY = "adaptive"
-DEFAULT_WINDOW_SIZE = 1_024
-DEFAULT_SAMPLE_POINTS = 5
 DEFAULT_PROGRESS_INTERVAL = 1_000
+DEFAULT_ADDRESS_BASE = 0
 
 
 @dataclass(frozen=True)
@@ -86,14 +77,13 @@ class ProbeRunner:
     label: str
     pause_s: float
     verbose: bool
-    raw_probe: Callable[[int, int], Tuple[bool, str]]
+    raw_probe: Callable[[int], Tuple[bool, str]]
     total_addresses: int
     progress_interval: int
-    probe_count: int = 0
-    cache: Dict[Tuple[int, int], Tuple[bool, str]] = field(default_factory=dict)
-    covered_addresses: set[int] = field(default_factory=set)
-    valid_addresses: set[int] = field(default_factory=set)
-    next_progress_report: int = field(init=False)
+    request_count: int = 0
+    covered_count: int = 0
+    valid_total: int = 0
+    next_progress_report: int = 0
     complete_reported: bool = False
     reported_valid_count: int = 0
 
@@ -101,47 +91,41 @@ class ProbeRunner:
         self.next_progress_report = min(self.progress_interval, self.total_addresses)
 
     def _report_progress(self) -> None:
-        covered = len(self.covered_addresses)
-        if covered >= self.total_addresses and self.complete_reported:
+        if self.covered_count >= self.total_addresses and self.complete_reported:
             return
 
-        if covered < self.next_progress_report and covered < self.total_addresses:
+        if self.covered_count < self.next_progress_report and self.covered_count < self.total_addresses:
             return
 
-        percent = (covered / self.total_addresses) * 100 if self.total_addresses else 100.0
-        valid_total = len(self.valid_addresses)
-        valid_delta = valid_total - self.reported_valid_count
+        percent = (self.covered_count / self.total_addresses) * 100 if self.total_addresses else 100.0
+        valid_delta = self.valid_total - self.reported_valid_count
         print(
-            f"[{self.label}] progress: {covered}/{self.total_addresses} addr covered "
-            f"({percent:.1f}%), probes={self.probe_count}, valid={valid_delta}, valid_total={valid_total}"
+            f"[{self.label}] progress: {self.covered_count}/{self.total_addresses} addr covered "
+            f"({percent:.1f}%), requests={self.request_count}, valid={valid_delta}, valid_total={self.valid_total}"
         )
-        self.reported_valid_count = valid_total
+        self.reported_valid_count = self.valid_total
 
-        if covered >= self.total_addresses:
+        if self.covered_count >= self.total_addresses:
             self.complete_reported = True
             self.next_progress_report = self.total_addresses + self.progress_interval
             return
 
-        while self.next_progress_report <= covered and self.next_progress_report < self.total_addresses:
+        while (
+            self.next_progress_report <= self.covered_count
+            and self.next_progress_report < self.total_addresses
+        ):
             self.next_progress_report += self.progress_interval
 
-    def probe(self, address: int, count: int, *, phase: str) -> Tuple[bool, str]:
-        key = (address, count)
-        cached = self.cache.get(key)
-        if cached is not None:
-            return cached
-
-        self.probe_count += 1
-        ok, detail = self.raw_probe(address, count)
-        self.cache[key] = (ok, detail)
-        self.covered_addresses.update(range(address, address + count))
+    def probe(self, address: int) -> Tuple[bool, str]:
+        self.request_count += 1
+        ok, detail = self.raw_probe(address)
+        self.covered_count += 1
         if ok:
-            self.valid_addresses.update(range(address, address + count))
+            self.valid_total += 1
 
         if self.verbose:
             status = "OK" if ok else "FAIL"
-            end = address + count - 1
-            print(f"[{self.label}] {status:<4} {phase:<10} {address}-{end} ({count} addr)")
+            print(f"[{self.label}] {status:<4} {address} (1 addr)")
             if detail and not ok:
                 print(f"  -> {detail}")
 
@@ -188,9 +172,9 @@ def read_holding_registers(client, address: int, count: int, slave_id: int):
         return client.read_holding_registers(address=address, count=count, slave=slave_id)
 
 
-def probe_coil_block(client, address: int, count: int, slave_id: int) -> Tuple[bool, str]:
+def probe_coil_address(client, address: int, slave_id: int) -> Tuple[bool, str]:
     try:
-        rr = read_coils(client, address=address, count=count, slave_id=slave_id)
+        rr = read_coils(client, address=address, count=1, slave_id=slave_id)
     except Exception as exc:
         return False, f"exception: {exc}"
 
@@ -198,15 +182,15 @@ def probe_coil_block(client, address: int, count: int, slave_id: int) -> Tuple[b
         return False, str(rr)
 
     bits = getattr(rr, "bits", None)
-    if bits is None or len(bits) < count:
-        return False, f"incomplete coil read: expected {count}, got {len(bits or [])}"
+    if bits is None or len(bits) < 1:
+        return False, "incomplete coil read: expected 1, got 0"
 
     return True, ""
 
 
-def probe_register_block(client, address: int, count: int, slave_id: int) -> Tuple[bool, str]:
+def probe_register_address(client, address: int, slave_id: int) -> Tuple[bool, str]:
     try:
-        rr = read_holding_registers(client, address=address, count=count, slave_id=slave_id)
+        rr = read_holding_registers(client, address=address, count=1, slave_id=slave_id)
     except Exception as exc:
         return False, f"exception: {exc}"
 
@@ -214,71 +198,67 @@ def probe_register_block(client, address: int, count: int, slave_id: int) -> Tup
         return False, str(rr)
 
     registers = getattr(rr, "registers", None)
-    if registers is None or len(registers) < count:
-        return False, f"incomplete register read: expected {count}, got {len(registers or [])}"
+    if registers is None or len(registers) < 1:
+        return False, "incomplete register read: expected 1, got 0"
 
     return True, ""
 
 
-def iter_windows(start: int, end: int, window_size: int) -> Iterator[AddressRange]:
-    current = start
-    while current <= end:
-        count = min(window_size, end - current + 1)
-        yield AddressRange(start=current, count=count)
-        current += count
+def to_display_address(address: int, address_base: int) -> int:
+    return address if address_base == 0 else address + 1
 
 
-def representative_addresses(start: int, end: int, sample_points: int) -> List[int]:
-    if end < start or sample_points < 1:
-        return []
-
-    if start == end:
-        return [start]
-
-    if sample_points == 1:
-        return [start + ((end - start) // 2)]
-
-    span = end - start
-    addresses = {
-        start + round((span * index) / (sample_points - 1))
-        for index in range(sample_points)
-    }
-    return sorted(addresses)
+def from_display_address(address: int, address_base: int) -> int:
+    return address if address_base == 0 else address - 1
 
 
-def exhaustive_scan_range(
-    *,
-    start: int,
-    end: int,
-    max_block: int,
-    probe_runner: ProbeRunner,
-    phase: str,
-) -> List[int]:
-    if end < start:
-        return []
+def prompt_for_integer(prompt: str, default: int) -> int:
+    while True:
+        response = input(f"{prompt} [{default}]: ").strip()
+        if not response:
+            return default
+        try:
+            return int(response)
+        except ValueError:
+            print("Please enter a whole number or press Enter for the default.")
 
-    def scan_block(block_start: int, block_count: int) -> List[int]:
-        ok, _detail = probe_runner.probe(block_start, block_count, phase=phase)
-        block_end = block_start + block_count - 1
 
-        if ok:
-            return list(range(block_start, block_end + 1))
+def prompt_for_scan_bounds(args: argparse.Namespace) -> argparse.Namespace:
+    print("\nManual scan range entry")
+    print("Press Enter to accept each default.")
 
-        if block_count == 1:
-            return []
+    address_base = prompt_for_integer("Address entry base (0 or 1)", args.address_base)
+    while address_base not in {0, 1}:
+        print("Address entry base must be 0 or 1.")
+        address_base = prompt_for_integer("Address entry base (0 or 1)", args.address_base)
 
-        left_count = block_count // 2
-        right_count = block_count - left_count
-        return scan_block(block_start, left_count) + scan_block(block_start + left_count, right_count)
+    args.address_base = address_base
 
-    valid: List[int] = []
-    current = start
-    while current <= end:
-        block_count = min(max_block, end - current + 1)
-        valid.extend(scan_block(current, block_count))
-        current += block_count
+    if args.mode in {"both", "coils"}:
+        coil_start_default = to_display_address(args.coil_start, address_base)
+        coil_end_default = to_display_address(args.coil_end, address_base)
+        args.coil_start = from_display_address(
+            prompt_for_integer("Coil scan start", coil_start_default),
+            address_base,
+        )
+        args.coil_end = from_display_address(
+            prompt_for_integer("Coil scan end", coil_end_default),
+            address_base,
+        )
 
-    return valid
+    if args.mode in {"both", "registers"}:
+        register_start_default = to_display_address(args.register_start, address_base)
+        register_end_default = to_display_address(args.register_end, address_base)
+        args.register_start = from_display_address(
+            prompt_for_integer("Register scan start", register_start_default),
+            address_base,
+        )
+        args.register_end = from_display_address(
+            prompt_for_integer("Register scan end", register_end_default),
+            address_base,
+        )
+
+    return args
 
 
 def discover_valid_addresses(
@@ -286,14 +266,10 @@ def discover_valid_addresses(
     label: str,
     start: int,
     end: int,
-    max_block: int,
     pause_s: float,
     verbose: bool,
-    strategy: str,
-    window_size: int,
-    sample_points: int,
     progress_interval: int,
-    probe: Callable[[int, int], Tuple[bool, str]],
+    probe: Callable[[int], Tuple[bool, str]],
 ) -> Tuple[List[int], int]:
     if end < start:
         return [], 0
@@ -307,54 +283,13 @@ def discover_valid_addresses(
         progress_interval=max(1, min(progress_interval, end - start + 1)),
     )
 
-    if strategy == "exhaustive":
-        valid = exhaustive_scan_range(
-            start=start,
-            end=end,
-            max_block=max_block,
-            probe_runner=probe_runner,
-            phase="sweep",
-        )
-        return valid, probe_runner.probe_count
+    valid_addresses: List[int] = []
+    for address in range(start, end + 1):
+        ok, _detail = probe_runner.probe(address)
+        if ok:
+            valid_addresses.append(address)
 
-    valid_addresses = set()
-    deferred_windows: List[AddressRange] = []
-
-    for window in iter_windows(start, end, window_size):
-        samples = representative_addresses(window.start, window.end, sample_points)
-        window_hit = False
-
-        for address in samples:
-            ok, _detail = probe_runner.probe(address, 1, phase="sample")
-            if ok:
-                window_hit = True
-                valid_addresses.add(address)
-
-        if window_hit:
-            valid_addresses.update(
-                exhaustive_scan_range(
-                    start=window.start,
-                    end=window.end,
-                    max_block=max_block,
-                    probe_runner=probe_runner,
-                    phase="expand",
-                )
-            )
-        else:
-            deferred_windows.append(window)
-
-    for window in deferred_windows:
-        valid_addresses.update(
-            exhaustive_scan_range(
-                start=window.start,
-                end=window.end,
-                max_block=max_block,
-                probe_runner=probe_runner,
-                phase="sweep",
-            )
-        )
-
-    return sorted(valid_addresses), probe_runner.probe_count
+    return valid_addresses, probe_runner.request_count
 
 
 def format_range(kind: str, address_range: AddressRange) -> str:
@@ -375,14 +310,14 @@ def print_summary(
     scan_start: int,
     scan_end: int,
     valid_addresses: Sequence[int],
-    probe_count: int,
+    request_count: int,
 ) -> None:
     ranges = contiguous_ranges(valid_addresses)
     total_valid = len(valid_addresses)
 
     print(f"\n{kind.title()} summary")
     print(f"Scanned: {scan_start}..{scan_end}")
-    print(f"Probes: {probe_count}")
+    print(f"Requests: {request_count}")
     print(f"Valid addresses: {total_valid}")
     print(f"Valid ranges: {len(ranges)}")
 
@@ -400,16 +335,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--baudrate", type=int, default=19200, help="Baud rate")
     parser.add_argument("--slave", type=int, default=1, help="Modbus slave ID")
     parser.add_argument(
+        "--address-base",
+        type=int,
+        choices=(0, 1),
+        default=DEFAULT_ADDRESS_BASE,
+        help="Display and manual-entry base for scan bounds: 0-based or 1-based",
+    )
+    parser.add_argument(
         "--mode",
         choices=("both", "coils", "registers"),
         default="both",
         help="Which address family to scan",
-    )
-    parser.add_argument(
-        "--strategy",
-        choices=("adaptive", "exhaustive"),
-        default=DEFAULT_STRATEGY,
-        help="Adaptive samples each window first, then still completes an exhaustive sweep",
     )
     parser.add_argument("--coil-start", type=int, default=DEFAULT_COIL_START, help="First coil address to scan")
     parser.add_argument("--coil-end", type=int, default=DEFAULT_COIL_END, help="Last coil address to scan")
@@ -426,24 +362,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Last holding-register address to scan",
     )
     parser.add_argument(
-        "--max-block",
-        type=int,
-        default=DEFAULT_MAX_BLOCK,
-        help="Largest block size to probe before recursively splitting failures",
-    )
-    parser.add_argument(
-        "--window-size",
-        type=int,
-        default=DEFAULT_WINDOW_SIZE,
-        help="Adaptive scan window size in addresses before the guaranteed exhaustive sweep",
-    )
-    parser.add_argument(
-        "--sample-points",
-        type=int,
-        default=DEFAULT_SAMPLE_POINTS,
-        help="Representative single-address probes per adaptive window",
-    )
-    parser.add_argument(
         "--progress-interval",
         type=int,
         default=DEFAULT_PROGRESS_INTERVAL,
@@ -453,9 +371,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--pause",
         type=float,
         default=0.0,
-        help="Optional delay in seconds after each probe to reduce bus load",
+        help="Optional delay in seconds after each read request to reduce bus load",
     )
-    parser.add_argument("--verbose", action="store_true", help="Print every probe and failure detail")
+    parser.add_argument("--verbose", action="store_true", help="Print every address result and failure detail")
     return parser
 
 
@@ -472,18 +390,6 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--coil-end must be >= --coil-start.")
     if args.register_end < args.register_start:
         raise ValueError("--register-end must be >= --register-start.")
-    if args.max_block < 1:
-        raise ValueError("--max-block must be >= 1.")
-    if args.max_block > MODBUS_MAX_COIL_READ_COUNT:
-        raise ValueError(f"--max-block must be <= {MODBUS_MAX_COIL_READ_COUNT} for coils.")
-    if args.mode in {"both", "registers"} and args.max_block > MODBUS_MAX_REGISTER_READ_COUNT:
-        raise ValueError(
-            f"--max-block must be <= {MODBUS_MAX_REGISTER_READ_COUNT} when scanning holding registers."
-        )
-    if args.window_size < 1:
-        raise ValueError("--window-size must be >= 1.")
-    if args.sample_points < 1:
-        raise ValueError("--sample-points must be >= 1.")
     if args.progress_interval < 1:
         raise ValueError("--progress-interval must be >= 1.")
     if args.pause < 0:
@@ -494,6 +400,13 @@ def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
 
+    if sys.stdin.isatty():
+        try:
+            args = prompt_for_scan_bounds(args)
+        except KeyboardInterrupt:
+            print("\n\nStopped by user before scan start.")
+            sys.exit(130)
+
     try:
         validate_args(args)
     except ValueError as exc:
@@ -501,14 +414,11 @@ def main() -> None:
 
     print(f"Connecting to {args.port} @ {args.baudrate} baud, slave {args.slave}")
     print(f"Mode: {args.mode}")
-    print(f"Strategy: {args.strategy}")
-    print(f"Max block size: {args.max_block}")
-    if args.strategy == "adaptive":
-        print(f"Adaptive window size: {args.window_size}")
-        print(f"Adaptive sample points: {args.sample_points}")
+    print(f"Manual address entry base: {args.address_base}-based")
+    print("Scan method: sequential single-address reads")
     print(f"Progress interval: {args.progress_interval} addresses")
     if args.pause > 0:
-        print(f"Pause between probes: {args.pause}s")
+        print(f"Pause between requests: {args.pause}s")
     if args.verbose:
         print("Verbose probe logging is enabled.")
 
@@ -538,48 +448,40 @@ def main() -> None:
     try:
         if args.mode in {"both", "coils"}:
             print(f"\nScanning coils D,{args.coil_start}..D,{args.coil_end}...")
-            coil_valid, coil_probes = discover_valid_addresses(
+            coil_valid, coil_requests = discover_valid_addresses(
                 label="coils",
                 start=args.coil_start,
                 end=args.coil_end,
-                max_block=args.max_block,
                 pause_s=args.pause,
                 verbose=args.verbose,
-                strategy=args.strategy,
-                window_size=args.window_size,
-                sample_points=args.sample_points,
                 progress_interval=args.progress_interval,
-                probe=lambda address, count: probe_coil_block(client, address, count, args.slave),
+                probe=lambda address: probe_coil_address(client, address, args.slave),
             )
             print_summary(
                 kind="coils",
                 scan_start=args.coil_start,
                 scan_end=args.coil_end,
                 valid_addresses=coil_valid,
-                probe_count=coil_probes,
+                request_count=coil_requests,
             )
 
         if args.mode in {"both", "registers"}:
             print(f"\nScanning holding registers {args.register_start}..{args.register_end}...")
-            register_valid, register_probes = discover_valid_addresses(
+            register_valid, register_requests = discover_valid_addresses(
                 label="registers",
                 start=args.register_start,
                 end=args.register_end,
-                max_block=args.max_block,
                 pause_s=args.pause,
                 verbose=args.verbose,
-                strategy=args.strategy,
-                window_size=args.window_size,
-                sample_points=args.sample_points,
                 progress_interval=args.progress_interval,
-                probe=lambda address, count: probe_register_block(client, address, count, args.slave),
+                probe=lambda address: probe_register_address(client, address, args.slave),
             )
             print_summary(
                 kind="registers",
                 scan_start=args.register_start,
                 scan_end=args.register_end,
                 valid_addresses=register_valid,
-                probe_count=register_probes,
+                request_count=register_requests,
             )
 
     except KeyboardInterrupt:
