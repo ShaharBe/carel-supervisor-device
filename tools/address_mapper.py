@@ -92,8 +92,10 @@ class ProbeRunner:
     probe_count: int = 0
     cache: Dict[Tuple[int, int], Tuple[bool, str]] = field(default_factory=dict)
     covered_addresses: set[int] = field(default_factory=set)
+    valid_addresses: set[int] = field(default_factory=set)
     next_progress_report: int = field(init=False)
     complete_reported: bool = False
+    reported_valid_count: int = 0
 
     def __post_init__(self) -> None:
         self.next_progress_report = min(self.progress_interval, self.total_addresses)
@@ -107,10 +109,13 @@ class ProbeRunner:
             return
 
         percent = (covered / self.total_addresses) * 100 if self.total_addresses else 100.0
+        valid_total = len(self.valid_addresses)
+        valid_delta = valid_total - self.reported_valid_count
         print(
             f"[{self.label}] progress: {covered}/{self.total_addresses} addr covered "
-            f"({percent:.1f}%), probes={self.probe_count}"
+            f"({percent:.1f}%), probes={self.probe_count}, valid={valid_delta}, valid_total={valid_total}"
         )
+        self.reported_valid_count = valid_total
 
         if covered >= self.total_addresses:
             self.complete_reported = True
@@ -130,6 +135,8 @@ class ProbeRunner:
         ok, detail = self.raw_probe(address, count)
         self.cache[key] = (ok, detail)
         self.covered_addresses.update(range(address, address + count))
+        if ok:
+            self.valid_addresses.update(range(address, address + count))
 
         if self.verbose:
             status = "OK" if ok else "FAIL"

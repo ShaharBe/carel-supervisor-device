@@ -89,6 +89,25 @@ class TestAdaptiveDiscovery:
         assert calls[:6] == [(0, 1), (32, 1), (63, 1), (64, 1), (96, 1), (127, 1)]
         assert probe_count == len(calls)
 
+    def test_progress_output_includes_valid_counts_without_verbose(self, capsys: pytest.CaptureFixture[str]):
+        discover_valid_addresses(
+            label="registers",
+            start=0,
+            end=7,
+            max_block=2,
+            pause_s=0.0,
+            verbose=False,
+            strategy="adaptive",
+            window_size=4,
+            sample_points=1,
+            progress_interval=4,
+            probe=sparse_probe({1, 6}, []),
+        )
+
+        captured = capsys.readouterr().out
+        assert "valid=" in captured
+        assert "valid_total=" in captured
+
 
 class TestValidateArgs:
     def test_rejects_addresses_above_protocol_maximum(self):
