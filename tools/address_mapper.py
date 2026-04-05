@@ -5,19 +5,26 @@ Reverse engineering tool: map valid Modbus coil and holding-register ranges.
 This scanner probes configurable address windows and assumes the target device
 returns a Modbus error whenever an address does not exist on this model.
 
-It uses block reads for speed, then recursively splits failing blocks down to
-single addresses so it can reconstruct the exact valid ranges.
+By default it scans the full legal 0-based Modbus PDU address span for coils
+and holding registers: 0..65535. The default adaptive strategy first samples a
+few representative addresses in each window so valid regions are discovered
+early, then completes an exhaustive sweep so isolated valid addresses are still
+found.
 
 Usage (on Pi):
   # First stop the service to free the serial port
   sudo systemctl stop carel-supervisor
 
-  # Scan both coils and holding registers in the default windows
+  # Scan the full legal Modbus address space for coils and holding registers
   /opt/carel-supervisor/venv/bin/python -u /opt/carel-supervisor/repo/tools/address_mapper.py
 
-  # Scan a wider register window with verbose probe output
+  # Restrict the scan to a smaller register window with verbose probe output
   /opt/carel-supervisor/venv/bin/python -u /opt/carel-supervisor/repo/tools/address_mapper.py \
-      --mode registers --register-end 511 --verbose
+      --mode registers --register-start 0 --register-end 511 --verbose
+
+  # Use the legacy exhaustive-only sweep
+  /opt/carel-supervisor/venv/bin/python -u /opt/carel-supervisor/repo/tools/address_mapper.py \
+      --strategy exhaustive --mode coils
 
 Environment:
   - Do not use USE_SIMULATOR=1 for this tool. The simulator returns default
@@ -35,9 +42,9 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable, List, Sequence, Tuple
+from typing import Callable, Dict, Iterable, Iterator, List, Sequence, Tuple
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -48,11 +55,19 @@ if str(APP_DIR) not in sys.path:
 from client_factory import create_modbus_client, is_simulator_mode
 
 
-DEFAULT_COIL_START = 0
-DEFAULT_COIL_END = 255
-DEFAULT_REGISTER_START = 0
-DEFAULT_REGISTER_END = 255
+MODBUS_MIN_ADDRESS = 0
+MODBUS_MAX_ADDRESS = 65_535
+MODBUS_MAX_COIL_READ_COUNT = 2_000
+MODBUS_MAX_REGISTER_READ_COUNT = 125
+
+DEFAULT_COIL_START = MODBUS_MIN_ADDRESS
+DEFAULT_COIL_END = MODBUS_MAX_ADDRESS
+DEFAULT_REGISTER_START = MODBUS_MIN_ADDRESS
+DEFAULT_REGISTER_END = MODBUS_MAX_ADDRESS
 DEFAULT_MAX_BLOCK = 16
+DEFAULT_STRATEGY = "adaptive"
+DEFAULT_WINDOW_SIZE = 1_024
+DEFAULT_SAMPLE_POINTS = 5
 
 
 @dataclass(frozen=True)
@@ -63,6 +78,38 @@ class AddressRange:
     @property
     def end(self) -> int:
         return self.start + self.count - 1
+
+
+@dataclass
+class ProbeRunner:
+    label: str
+    pause_s: float
+    verbose: bool
+    raw_probe: Callable[[int, int], Tuple[bool, str]]
+    probe_count: int = 0
+    cache: Dict[Tuple[int, int], Tuple[bool, str]] = field(default_factory=dict)
+
+    def probe(self, address: int, count: int, *, phase: str) -> Tuple[bool, str]:
+        key = (address, count)
+        cached = self.cache.get(key)
+        if cached is not None:
+            return cached
+
+        self.probe_count += 1
+        ok, detail = self.raw_probe(address, count)
+        self.cache[key] = (ok, detail)
+
+        if self.verbose:
+            status = "OK" if ok else "FAIL"
+            end = address + count - 1
+            print(f"[{self.label}] {status:<4} {phase:<10} {address}-{end} ({count} addr)")
+            if detail and not ok:
+                print(f"  -> {detail}")
+
+        if self.pause_s > 0:
+            time.sleep(self.pause_s)
+
+        return ok, detail
 
 
 def contiguous_ranges(addresses: Iterable[int]) -> List[AddressRange]:
@@ -132,36 +179,46 @@ def probe_register_block(client, address: int, count: int, slave_id: int) -> Tup
     return True, ""
 
 
-def discover_valid_addresses(
+def iter_windows(start: int, end: int, window_size: int) -> Iterator[AddressRange]:
+    current = start
+    while current <= end:
+        count = min(window_size, end - current + 1)
+        yield AddressRange(start=current, count=count)
+        current += count
+
+
+def representative_addresses(start: int, end: int, sample_points: int) -> List[int]:
+    if end < start or sample_points < 1:
+        return []
+
+    if start == end:
+        return [start]
+
+    if sample_points == 1:
+        return [start + ((end - start) // 2)]
+
+    span = end - start
+    addresses = {
+        start + round((span * index) / (sample_points - 1))
+        for index in range(sample_points)
+    }
+    return sorted(addresses)
+
+
+def exhaustive_scan_range(
     *,
-    label: str,
     start: int,
     end: int,
     max_block: int,
-    pause_s: float,
-    verbose: bool,
-    probe: Callable[[int, int], Tuple[bool, str]],
-) -> Tuple[List[int], int]:
+    probe_runner: ProbeRunner,
+    phase: str,
+) -> List[int]:
     if end < start:
-        return [], 0
-
-    probe_count = 0
+        return []
 
     def scan_block(block_start: int, block_count: int) -> List[int]:
-        nonlocal probe_count
-
-        probe_count += 1
-        ok, detail = probe(block_start, block_count)
+        ok, _detail = probe_runner.probe(block_start, block_count, phase=phase)
         block_end = block_start + block_count - 1
-
-        if verbose:
-            status = "OK" if ok else "FAIL"
-            print(f"[{label}] {status:<4} {block_start}-{block_end} ({block_count} addr)")
-            if detail and not ok:
-                print(f"  -> {detail}")
-
-        if pause_s > 0:
-            time.sleep(pause_s)
 
         if ok:
             return list(range(block_start, block_end + 1))
@@ -180,7 +237,80 @@ def discover_valid_addresses(
         valid.extend(scan_block(current, block_count))
         current += block_count
 
-    return valid, probe_count
+    return valid
+
+
+def discover_valid_addresses(
+    *,
+    label: str,
+    start: int,
+    end: int,
+    max_block: int,
+    pause_s: float,
+    verbose: bool,
+    strategy: str,
+    window_size: int,
+    sample_points: int,
+    probe: Callable[[int, int], Tuple[bool, str]],
+) -> Tuple[List[int], int]:
+    if end < start:
+        return [], 0
+
+    probe_runner = ProbeRunner(
+        label=label,
+        pause_s=pause_s,
+        verbose=verbose,
+        raw_probe=probe,
+    )
+
+    if strategy == "exhaustive":
+        valid = exhaustive_scan_range(
+            start=start,
+            end=end,
+            max_block=max_block,
+            probe_runner=probe_runner,
+            phase="sweep",
+        )
+        return valid, probe_runner.probe_count
+
+    valid_addresses = set()
+    deferred_windows: List[AddressRange] = []
+
+    for window in iter_windows(start, end, window_size):
+        samples = representative_addresses(window.start, window.end, sample_points)
+        window_hit = False
+
+        for address in samples:
+            ok, _detail = probe_runner.probe(address, 1, phase="sample")
+            if ok:
+                window_hit = True
+                valid_addresses.add(address)
+
+        if window_hit:
+            valid_addresses.update(
+                exhaustive_scan_range(
+                    start=window.start,
+                    end=window.end,
+                    max_block=max_block,
+                    probe_runner=probe_runner,
+                    phase="expand",
+                )
+            )
+        else:
+            deferred_windows.append(window)
+
+    for window in deferred_windows:
+        valid_addresses.update(
+            exhaustive_scan_range(
+                start=window.start,
+                end=window.end,
+                max_block=max_block,
+                probe_runner=probe_runner,
+                phase="sweep",
+            )
+        )
+
+    return sorted(valid_addresses), probe_runner.probe_count
 
 
 def format_range(kind: str, address_range: AddressRange) -> str:
@@ -231,6 +361,12 @@ def build_parser() -> argparse.ArgumentParser:
         default="both",
         help="Which address family to scan",
     )
+    parser.add_argument(
+        "--strategy",
+        choices=("adaptive", "exhaustive"),
+        default=DEFAULT_STRATEGY,
+        help="Adaptive samples each window first, then still completes an exhaustive sweep",
+    )
     parser.add_argument("--coil-start", type=int, default=DEFAULT_COIL_START, help="First coil address to scan")
     parser.add_argument("--coil-end", type=int, default=DEFAULT_COIL_END, help="Last coil address to scan")
     parser.add_argument(
@@ -252,6 +388,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Largest block size to probe before recursively splitting failures",
     )
     parser.add_argument(
+        "--window-size",
+        type=int,
+        default=DEFAULT_WINDOW_SIZE,
+        help="Adaptive scan window size in addresses before the guaranteed exhaustive sweep",
+    )
+    parser.add_argument(
+        "--sample-points",
+        type=int,
+        default=DEFAULT_SAMPLE_POINTS,
+        help="Representative single-address probes per adaptive window",
+    )
+    parser.add_argument(
         "--pause",
         type=float,
         default=0.0,
@@ -262,16 +410,30 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def validate_args(args: argparse.Namespace) -> None:
-    if args.coil_start < 0 or args.coil_end < 0:
-        raise ValueError("Coil scan bounds must be >= 0.")
-    if args.register_start < 0 or args.register_end < 0:
-        raise ValueError("Register scan bounds must be >= 0.")
+    if args.coil_start < MODBUS_MIN_ADDRESS or args.coil_end < MODBUS_MIN_ADDRESS:
+        raise ValueError(f"Coil scan bounds must be >= {MODBUS_MIN_ADDRESS}.")
+    if args.register_start < MODBUS_MIN_ADDRESS or args.register_end < MODBUS_MIN_ADDRESS:
+        raise ValueError(f"Register scan bounds must be >= {MODBUS_MIN_ADDRESS}.")
+    if args.coil_start > MODBUS_MAX_ADDRESS or args.coil_end > MODBUS_MAX_ADDRESS:
+        raise ValueError(f"Coil scan bounds must be <= {MODBUS_MAX_ADDRESS}.")
+    if args.register_start > MODBUS_MAX_ADDRESS or args.register_end > MODBUS_MAX_ADDRESS:
+        raise ValueError(f"Register scan bounds must be <= {MODBUS_MAX_ADDRESS}.")
     if args.coil_end < args.coil_start:
         raise ValueError("--coil-end must be >= --coil-start.")
     if args.register_end < args.register_start:
         raise ValueError("--register-end must be >= --register-start.")
     if args.max_block < 1:
         raise ValueError("--max-block must be >= 1.")
+    if args.max_block > MODBUS_MAX_COIL_READ_COUNT:
+        raise ValueError(f"--max-block must be <= {MODBUS_MAX_COIL_READ_COUNT} for coils.")
+    if args.mode in {"both", "registers"} and args.max_block > MODBUS_MAX_REGISTER_READ_COUNT:
+        raise ValueError(
+            f"--max-block must be <= {MODBUS_MAX_REGISTER_READ_COUNT} when scanning holding registers."
+        )
+    if args.window_size < 1:
+        raise ValueError("--window-size must be >= 1.")
+    if args.sample_points < 1:
+        raise ValueError("--sample-points must be >= 1.")
     if args.pause < 0:
         raise ValueError("--pause must be >= 0.")
 
@@ -287,7 +449,11 @@ def main() -> None:
 
     print(f"Connecting to {args.port} @ {args.baudrate} baud, slave {args.slave}")
     print(f"Mode: {args.mode}")
+    print(f"Strategy: {args.strategy}")
     print(f"Max block size: {args.max_block}")
+    if args.strategy == "adaptive":
+        print(f"Adaptive window size: {args.window_size}")
+        print(f"Adaptive sample points: {args.sample_points}")
     if args.pause > 0:
         print(f"Pause between probes: {args.pause}s")
     if args.verbose:
@@ -326,6 +492,9 @@ def main() -> None:
                 max_block=args.max_block,
                 pause_s=args.pause,
                 verbose=args.verbose,
+                strategy=args.strategy,
+                window_size=args.window_size,
+                sample_points=args.sample_points,
                 probe=lambda address, count: probe_coil_block(client, address, count, args.slave),
             )
             print_summary(
@@ -345,6 +514,9 @@ def main() -> None:
                 max_block=args.max_block,
                 pause_s=args.pause,
                 verbose=args.verbose,
+                strategy=args.strategy,
+                window_size=args.window_size,
+                sample_points=args.sample_points,
                 probe=lambda address, count: probe_register_block(client, address, count, args.slave),
             )
             print_summary(
