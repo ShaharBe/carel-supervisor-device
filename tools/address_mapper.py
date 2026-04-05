@@ -68,6 +68,7 @@ DEFAULT_MAX_BLOCK = 16
 DEFAULT_STRATEGY = "adaptive"
 DEFAULT_WINDOW_SIZE = 1_024
 DEFAULT_SAMPLE_POINTS = 5
+DEFAULT_PROGRESS_INTERVAL = 1_000
 
 
 @dataclass(frozen=True)
@@ -86,8 +87,38 @@ class ProbeRunner:
     pause_s: float
     verbose: bool
     raw_probe: Callable[[int, int], Tuple[bool, str]]
+    total_addresses: int
+    progress_interval: int
     probe_count: int = 0
     cache: Dict[Tuple[int, int], Tuple[bool, str]] = field(default_factory=dict)
+    covered_addresses: set[int] = field(default_factory=set)
+    next_progress_report: int = field(init=False)
+    complete_reported: bool = False
+
+    def __post_init__(self) -> None:
+        self.next_progress_report = min(self.progress_interval, self.total_addresses)
+
+    def _report_progress(self) -> None:
+        covered = len(self.covered_addresses)
+        if covered >= self.total_addresses and self.complete_reported:
+            return
+
+        if covered < self.next_progress_report and covered < self.total_addresses:
+            return
+
+        percent = (covered / self.total_addresses) * 100 if self.total_addresses else 100.0
+        print(
+            f"[{self.label}] progress: {covered}/{self.total_addresses} addr covered "
+            f"({percent:.1f}%), probes={self.probe_count}"
+        )
+
+        if covered >= self.total_addresses:
+            self.complete_reported = True
+            self.next_progress_report = self.total_addresses + self.progress_interval
+            return
+
+        while self.next_progress_report <= covered and self.next_progress_report < self.total_addresses:
+            self.next_progress_report += self.progress_interval
 
     def probe(self, address: int, count: int, *, phase: str) -> Tuple[bool, str]:
         key = (address, count)
@@ -98,6 +129,7 @@ class ProbeRunner:
         self.probe_count += 1
         ok, detail = self.raw_probe(address, count)
         self.cache[key] = (ok, detail)
+        self.covered_addresses.update(range(address, address + count))
 
         if self.verbose:
             status = "OK" if ok else "FAIL"
@@ -105,6 +137,8 @@ class ProbeRunner:
             print(f"[{self.label}] {status:<4} {phase:<10} {address}-{end} ({count} addr)")
             if detail and not ok:
                 print(f"  -> {detail}")
+
+        self._report_progress()
 
         if self.pause_s > 0:
             time.sleep(self.pause_s)
@@ -251,6 +285,7 @@ def discover_valid_addresses(
     strategy: str,
     window_size: int,
     sample_points: int,
+    progress_interval: int,
     probe: Callable[[int, int], Tuple[bool, str]],
 ) -> Tuple[List[int], int]:
     if end < start:
@@ -261,6 +296,8 @@ def discover_valid_addresses(
         pause_s=pause_s,
         verbose=verbose,
         raw_probe=probe,
+        total_addresses=(end - start + 1),
+        progress_interval=max(1, min(progress_interval, end - start + 1)),
     )
 
     if strategy == "exhaustive":
@@ -353,7 +390,7 @@ def print_summary(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Map valid Modbus coil and holding-register address ranges")
     parser.add_argument("--port", default="/dev/ttyACM0", help="Serial port")
-    parser.add_argument("--baudrate", type=int, default=9600, help="Baud rate")
+    parser.add_argument("--baudrate", type=int, default=19200, help="Baud rate")
     parser.add_argument("--slave", type=int, default=1, help="Modbus slave ID")
     parser.add_argument(
         "--mode",
@@ -400,6 +437,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Representative single-address probes per adaptive window",
     )
     parser.add_argument(
+        "--progress-interval",
+        type=int,
+        default=DEFAULT_PROGRESS_INTERVAL,
+        help="Print a short progress update after this many additional addresses are covered",
+    )
+    parser.add_argument(
         "--pause",
         type=float,
         default=0.0,
@@ -434,6 +477,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--window-size must be >= 1.")
     if args.sample_points < 1:
         raise ValueError("--sample-points must be >= 1.")
+    if args.progress_interval < 1:
+        raise ValueError("--progress-interval must be >= 1.")
     if args.pause < 0:
         raise ValueError("--pause must be >= 0.")
 
@@ -454,6 +499,7 @@ def main() -> None:
     if args.strategy == "adaptive":
         print(f"Adaptive window size: {args.window_size}")
         print(f"Adaptive sample points: {args.sample_points}")
+    print(f"Progress interval: {args.progress_interval} addresses")
     if args.pause > 0:
         print(f"Pause between probes: {args.pause}s")
     if args.verbose:
@@ -495,6 +541,7 @@ def main() -> None:
                 strategy=args.strategy,
                 window_size=args.window_size,
                 sample_points=args.sample_points,
+                progress_interval=args.progress_interval,
                 probe=lambda address, count: probe_coil_block(client, address, count, args.slave),
             )
             print_summary(
@@ -517,6 +564,7 @@ def main() -> None:
                 strategy=args.strategy,
                 window_size=args.window_size,
                 sample_points=args.sample_points,
+                progress_interval=args.progress_interval,
                 probe=lambda address, count: probe_register_block(client, address, count, args.slave),
             )
             print_summary(

@@ -27,10 +27,12 @@ def make_args(**overrides) -> argparse.Namespace:
         "coil_end": MODBUS_MAX_ADDRESS,
         "register_start": 0,
         "register_end": MODBUS_MAX_ADDRESS,
+        "baudrate": 19200,
         "mode": "both",
         "max_block": 16,
         "window_size": 1024,
         "sample_points": 5,
+        "progress_interval": 1000,
         "pause": 0.0,
     }
     values.update(overrides)
@@ -54,6 +56,7 @@ class TestParserDefaults:
         assert args.coil_end == MODBUS_MAX_ADDRESS
         assert args.register_start == 0
         assert args.register_end == MODBUS_MAX_ADDRESS
+        assert args.baudrate == 19200
         assert args.strategy == "adaptive"
 
 
@@ -78,6 +81,7 @@ class TestAdaptiveDiscovery:
             strategy="adaptive",
             window_size=64,
             sample_points=3,
+            progress_interval=1000,
             probe=sparse_probe({37, 90}, calls),
         )
 
@@ -94,3 +98,7 @@ class TestValidateArgs:
     def test_rejects_register_block_sizes_above_protocol_limit(self):
         with pytest.raises(ValueError, match="<= 125"):
             validate_args(make_args(mode="registers", max_block=126))
+
+    def test_rejects_non_positive_progress_interval(self):
+        with pytest.raises(ValueError, match="progress-interval"):
+            validate_args(make_args(progress_interval=0))
