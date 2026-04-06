@@ -10,7 +10,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
-from typing import Any, Dict, Optional, cast
+from typing import Any, Callable, Dict, Optional, cast
 
 from alarms import ALARM_CATALOG
 from client_factory import create_modbus_client, is_simulator_mode
@@ -105,6 +105,16 @@ def build_modbus_client(port: str):
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+@dataclass(frozen=True)
+class PollBlockResult:
+    data: Any = None
+    error: Exception | None = None
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None
 
 
 @dataclass
@@ -524,9 +534,15 @@ def write_device_rtc(value: datetime, current_raw_year: Optional[int]) -> None:
     )
 
 
-def poll_registers_once() -> None:
-    """Read live controller data blocks and update the shared cache."""
+def _capture_poll_block(reader: Callable[[], Any]) -> PollBlockResult:
     try:
+        return PollBlockResult(data=reader())
+    except Exception as exc:
+        return PollBlockResult(error=exc)
+
+
+def read_temp_block() -> PollBlockResult:
+    def _read() -> dict[str, Any]:
         with modbus_lock:
             modbus_connect_or_raise()
             temp_rr = read_holding_registers(address=TEMP_ADDR, count=1)
@@ -537,46 +553,31 @@ def poll_registers_once() -> None:
             raise RuntimeError("Modbus read returned no temperature registers")
 
         temp_raw = int(temp_rr.registers[0])
-        temp_c = temp_raw / TEMP_SCALE
+        return {
+            "temp_raw": temp_raw,
+            "temp_c": temp_raw / TEMP_SCALE,
+        }
 
-        with cache_lock:
-            cache.temp_raw = temp_raw
-            cache.temp_c = temp_c
-            cache.last_update_utc = now_iso()
-            cache.last_error = None
-        clear_runtime_error()
-    except Exception as exc:
-        reset_modbus_client()
-        error_message = normalize_modbus_error(exc)
-        note_runtime_error(error_message)
-        with cache_lock:
-            cache.last_error = error_message
+    return _capture_poll_block(_read)
 
-    if interactive_modbus_priority_active():
-        return
 
-    try:
+def read_rtc_block() -> PollBlockResult:
+    def _read() -> dict[str, Any]:
         with modbus_lock:
             modbus_connect_or_raise()
             device_time, raw_year, weekday = read_device_rtc_values()
 
-        with cache_lock:
-            cache.device_time_iso_local = format_device_datetime_local(device_time)
-            cache.device_time_display = device_time.strftime("%Y-%m-%d %H:%M")
-            cache.device_time_weekday = weekday
-            cache.device_time_raw_year = raw_year
-            cache.last_rtc_update_utc = now_iso()
-            cache.rtc_error = None
-    except Exception as exc:
-        reset_modbus_client()
-        error_message = normalize_modbus_error(exc)
-        with cache_lock:
-            cache.rtc_error = error_message
+        return {
+            "device_time": device_time,
+            "raw_year": raw_year,
+            "weekday": weekday,
+        }
 
-    if interactive_modbus_priority_active():
-        return
+    return _capture_poll_block(_read)
 
-    try:
+
+def read_info_block() -> PollBlockResult:
+    def _read() -> dict[str, Any]:
         with modbus_lock:
             modbus_connect_or_raise()
             info1_rr = read_holding_registers(
@@ -593,26 +594,22 @@ def poll_registers_once() -> None:
         if info2_rr.isError():
             raise RuntimeError(f"Modbus read error (info block 2): {info2_rr}")
 
-        with cache_lock:
-            cache.info_conductivity = int(info1_rr.registers[1])
-            cache.info_cyl1_phase = int(info1_rr.registers[3])
-            cache.info_cyl1_status = int(info1_rr.registers[4])
-            cache.info_cyl2_phase = int(info1_rr.registers[5])
-            cache.info_cyl2_status = int(info1_rr.registers[6])
-            cache.info_cyl1_hours = int(info2_rr.registers[0])
-            cache.info_cyl2_hours = int(info2_rr.registers[1])
-            cache.info_voltage_type = int(info2_rr.registers[2])
-            cache.info_error = None
-    except Exception as exc:
-        reset_modbus_client()
-        error_message = normalize_modbus_error(exc)
-        with cache_lock:
-            cache.info_error = error_message
+        return {
+            "info_conductivity": int(info1_rr.registers[1]),
+            "info_cyl1_phase": int(info1_rr.registers[3]),
+            "info_cyl1_status": int(info1_rr.registers[4]),
+            "info_cyl2_phase": int(info1_rr.registers[5]),
+            "info_cyl2_status": int(info1_rr.registers[6]),
+            "info_cyl1_hours": int(info2_rr.registers[0]),
+            "info_cyl2_hours": int(info2_rr.registers[1]),
+            "info_voltage_type": int(info2_rr.registers[2]),
+        }
 
-    if interactive_modbus_priority_active():
-        return
+    return _capture_poll_block(_read)
 
-    try:
+
+def read_humidifier_status_block() -> PollBlockResult:
+    def _read() -> dict[str, Any]:
         with modbus_lock:
             modbus_connect_or_raise()
             humidifier_status_rr = read_holding_registers(address=HUMIDIFIER_STATUS_ADDR, count=1)
@@ -622,17 +619,15 @@ def poll_registers_once() -> None:
         if not humidifier_status_rr.registers:
             raise RuntimeError("Modbus read returned no humidifier status registers")
 
-        with cache_lock:
-            cache.info_humidifier_status = int(humidifier_status_rr.registers[0])
-    except Exception:
-        reset_modbus_client()
-        with cache_lock:
-            cache.info_humidifier_status = None
+        return {
+            "info_humidifier_status": int(humidifier_status_rr.registers[0]),
+        }
 
-    if interactive_modbus_priority_active():
-        return
+    return _capture_poll_block(_read)
 
-    try:
+
+def read_alarms_block() -> PollBlockResult:
+    def _read() -> dict[str, Any]:
         active_alarms: list[dict[str, Any]] = []
         skipped_alarm_count = 0
 
@@ -658,26 +653,17 @@ def poll_registers_once() -> None:
                 ]
                 skipped_alarm_count = len(ALARM_CATALOG.active_skipped(alarm_bits))
 
-        with cache_lock:
-            cache.alarms_has_active = alarms_have_active
-            cache.alarms_active = active_alarms
-            cache.alarms_skipped_active_count = skipped_alarm_count
-            cache.alarms_last_scan_utc = now_iso()
-            cache.alarms_error = None
-    except Exception as exc:
-        reset_modbus_client()
-        error_message = normalize_modbus_error(exc)
-        with cache_lock:
-            cache.alarms_has_active = None
-            cache.alarms_active = []
-            cache.alarms_skipped_active_count = 0
-            cache.alarms_last_scan_utc = now_iso()
-            cache.alarms_error = error_message
+        return {
+            "alarms_has_active": alarms_have_active,
+            "alarms_active": active_alarms,
+            "alarms_skipped_active_count": skipped_alarm_count,
+        }
 
-    if interactive_modbus_priority_active():
-        return
+    return _capture_poll_block(_read)
 
-    try:
+
+def read_coils_block() -> PollBlockResult:
+    def _read() -> dict[str, Any]:
         with modbus_lock:
             modbus_connect_or_raise()
             humidifier_rr = read_coils(address=HUMIDIFIER_REMOTE_ONOFF_COIL, count=1)
@@ -688,14 +674,177 @@ def poll_registers_once() -> None:
         if drain_rr.isError():
             raise RuntimeError(f"Modbus read error (drain coil): {drain_rr}")
 
-        with cache_lock:
-            cache.humidifier_network_enabled = bool(humidifier_rr.bits[0]) if humidifier_rr.bits else None
-            cache.cyl1_drain_on = bool(drain_rr.bits[0]) if drain_rr.bits else None
-    except Exception:
-        reset_modbus_client()
-        with cache_lock:
-            cache.humidifier_network_enabled = None
-            cache.cyl1_drain_on = None
+        return {
+            "humidifier_network_enabled": bool(humidifier_rr.bits[0]) if humidifier_rr.bits else None,
+            "cyl1_drain_on": bool(drain_rr.bits[0]) if drain_rr.bits else None,
+        }
+
+    return _capture_poll_block(_read)
+
+
+def _apply_temp_block(data: dict[str, Any]) -> None:
+    with cache_lock:
+        cache.temp_raw = data["temp_raw"]
+        cache.temp_c = data["temp_c"]
+        cache.last_update_utc = now_iso()
+        cache.last_error = None
+
+
+def _apply_temp_block_error(error_message: str) -> None:
+    with cache_lock:
+        cache.last_error = error_message
+
+
+def _apply_rtc_block(data: dict[str, Any]) -> None:
+    device_time = cast(datetime, data["device_time"])
+    with cache_lock:
+        cache.device_time_iso_local = format_device_datetime_local(device_time)
+        cache.device_time_display = device_time.strftime("%Y-%m-%d %H:%M")
+        cache.device_time_weekday = cast(int, data["weekday"])
+        cache.device_time_raw_year = cast(int, data["raw_year"])
+        cache.last_rtc_update_utc = now_iso()
+        cache.rtc_error = None
+
+
+def _apply_rtc_block_error(error_message: str) -> None:
+    with cache_lock:
+        cache.rtc_error = error_message
+
+
+def _apply_info_block(data: dict[str, Any]) -> None:
+    with cache_lock:
+        cache.info_conductivity = data["info_conductivity"]
+        cache.info_cyl1_phase = data["info_cyl1_phase"]
+        cache.info_cyl1_status = data["info_cyl1_status"]
+        cache.info_cyl2_phase = data["info_cyl2_phase"]
+        cache.info_cyl2_status = data["info_cyl2_status"]
+        cache.info_cyl1_hours = data["info_cyl1_hours"]
+        cache.info_cyl2_hours = data["info_cyl2_hours"]
+        cache.info_voltage_type = data["info_voltage_type"]
+        cache.info_error = None
+
+
+def _apply_info_block_error(error_message: str) -> None:
+    with cache_lock:
+        cache.info_error = error_message
+
+
+def _apply_humidifier_status_block(data: dict[str, Any]) -> None:
+    with cache_lock:
+        cache.info_humidifier_status = data["info_humidifier_status"]
+
+
+def _apply_humidifier_status_block_error(_error_message: str) -> None:
+    with cache_lock:
+        cache.info_humidifier_status = None
+
+
+def _apply_alarms_block(data: dict[str, Any]) -> None:
+    with cache_lock:
+        cache.alarms_has_active = data["alarms_has_active"]
+        cache.alarms_active = data["alarms_active"]
+        cache.alarms_skipped_active_count = data["alarms_skipped_active_count"]
+        cache.alarms_last_scan_utc = now_iso()
+        cache.alarms_error = None
+
+
+def _apply_alarms_block_error(error_message: str) -> None:
+    with cache_lock:
+        cache.alarms_has_active = None
+        cache.alarms_active = []
+        cache.alarms_skipped_active_count = 0
+        cache.alarms_last_scan_utc = now_iso()
+        cache.alarms_error = error_message
+
+
+def _apply_coils_block(data: dict[str, Any]) -> None:
+    with cache_lock:
+        cache.humidifier_network_enabled = data["humidifier_network_enabled"]
+        cache.cyl1_drain_on = data["cyl1_drain_on"]
+
+
+def _apply_coils_block_error(_error_message: str) -> None:
+    with cache_lock:
+        cache.humidifier_network_enabled = None
+        cache.cyl1_drain_on = None
+
+
+def _run_poll_block(
+    reader: Callable[[], PollBlockResult],
+    on_success: Callable[[dict[str, Any]], None],
+    on_error: Callable[[str], None],
+    *,
+    note_error: bool = False,
+    clear_runtime_on_success: bool = False,
+) -> None:
+    result = reader()
+    if result.ok:
+        on_success(cast(dict[str, Any], result.data))
+        if clear_runtime_on_success:
+            clear_runtime_error()
+        return
+
+    reset_modbus_client()
+    error_message = normalize_modbus_error(cast(Exception, result.error))
+    if note_error:
+        note_runtime_error(error_message)
+    on_error(error_message)
+
+
+def poll_registers_once() -> None:
+    """Read live controller data blocks and update the shared cache."""
+    _run_poll_block(
+        read_temp_block,
+        _apply_temp_block,
+        _apply_temp_block_error,
+        note_error=True,
+        clear_runtime_on_success=True,
+    )
+
+    if interactive_modbus_priority_active():
+        return
+
+    _run_poll_block(
+        read_rtc_block,
+        _apply_rtc_block,
+        _apply_rtc_block_error,
+    )
+
+    if interactive_modbus_priority_active():
+        return
+
+    _run_poll_block(
+        read_info_block,
+        _apply_info_block,
+        _apply_info_block_error,
+    )
+
+    if interactive_modbus_priority_active():
+        return
+
+    _run_poll_block(
+        read_humidifier_status_block,
+        _apply_humidifier_status_block,
+        _apply_humidifier_status_block_error,
+    )
+
+    if interactive_modbus_priority_active():
+        return
+
+    _run_poll_block(
+        read_alarms_block,
+        _apply_alarms_block,
+        _apply_alarms_block_error,
+    )
+
+    if interactive_modbus_priority_active():
+        return
+
+    _run_poll_block(
+        read_coils_block,
+        _apply_coils_block,
+        _apply_coils_block_error,
+    )
 
 
 def poller_loop(stop_evt: threading.Event) -> None:
