@@ -1601,6 +1601,15 @@ window.CarelMenuWidget = (() => {
         menuCurrentPath = menuNode.path;
         menuSelectedIndex = findSelectableChildIndex(menuNode, null);
         renderMenuWidget();
+      },
+      getStoredValue(path) {
+        return menuValueStore.get(path);
+      },
+      getCurrentMenuChildPaths() {
+        return getCurrentMenuChildren().map((child) => child.path);
+      },
+      getNode(path) {
+        return getMenuNode(path);
       }
     }
   };
