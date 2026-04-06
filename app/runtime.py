@@ -42,7 +42,7 @@ from modbus_map import (
 
 
 COM_PORT = "/dev/ttyACM0"
-BAUDRATE = 9600
+BAUDRATE = 19200
 PARITY = "N"
 STOPBITS = 1
 BYTESIZE = 8
