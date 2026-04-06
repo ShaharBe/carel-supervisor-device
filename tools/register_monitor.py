@@ -77,8 +77,8 @@ REGISTER_DEFS: Sequence[RegisterDef] = (
     RegisterDef("A", 8, True, "limit probe: maximum (calibration)"),
     RegisterDef("A", 9, True, "limit probe: offset (calibration)"),
     RegisterDef("A", 10, False, "nominal production (kg/h)"),
-    # RegisterDef("A", 11, False, "total actual current (a)"),
-    # RegisterDef("A", 12, False, "cylinder 1: actual current (a)"),
+    RegisterDef("A", 11, False, "total actual current (a)"),
+    RegisterDef("A", 12, False, "cylinder 1: actual current (a)"),
     RegisterDef("A", 13, False, "cylinder 2: actual current (a)"),
     RegisterDef("A", 14, True, "maximum production (p0)"),
     RegisterDef("A", 15, True, "%rh set point"),
@@ -368,7 +368,7 @@ def print_help(a_scale: float) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Monitor selected CAREL A/I registers for changes")
     parser.add_argument("--port", default="/dev/ttyACM0", help="Serial port")
-    parser.add_argument("--baudrate", type=int, default=9600, help="Baud rate")
+    parser.add_argument("--baudrate", type=int, default=19200, help="Baud rate")
     parser.add_argument("--slave", type=int, default=1, help="Modbus slave ID")
     parser.add_argument("--interval", type=float, default=0.5, help="Poll interval (seconds)")
     parser.add_argument(

@@ -203,7 +203,7 @@ def toggle_coil(client: ModbusSerialClient, addr: int, slave_id: int) -> Optiona
 def main():
     parser = argparse.ArgumentParser(description="Monitor coils for changes")
     parser.add_argument("--port", default="/dev/ttyACM0", help="Serial port")
-    parser.add_argument("--baudrate", type=int, default=9600, help="Baud rate")
+    parser.add_argument("--baudrate", type=int, default=19200, help="Baud rate")
     parser.add_argument("--slave", type=int, default=1, help="Modbus slave ID")
     parser.add_argument("--interval", type=float, default=0.5, help="Poll interval (seconds)")
     args = parser.parse_args()
