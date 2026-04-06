@@ -29,6 +29,7 @@ from menu_service import (
     MAX_PRODUCTION_FIELD,
     PROP_BAND_FIELD,
     SETPOINT_FIELD,
+    annotate_menu_tree,
     coerce_menu_write,
     ensure_dashboard_config_cache,
     format_limit,
@@ -115,11 +116,14 @@ def index() -> str:
         if is_simulator_mode()
         else "CAREL\u2122 Supervisory System"
     )
+    menu_payload = load_display_menu()
+    if menu_payload.get("ok"):
+        annotate_menu_tree(menu_payload["root"])
     return render_template(
         "index.html",
         APP_TITLE=app_title,
         APP_COMMIT_HASH=APP_COMMIT_HASH,
-        DISPLAY_MENU=load_display_menu(),
+        DISPLAY_MENU=menu_payload,
     )
 
 

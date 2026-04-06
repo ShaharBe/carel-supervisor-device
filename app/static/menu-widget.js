@@ -526,6 +526,19 @@ window.CarelMenuWidget = (() => {
       return null;
     }
 
+    // Prefer the backend-resolved editor when present.
+    const resolved = node.resolved_editor;
+    if (resolved && resolved.type) {
+      return {
+        type: resolved.type,
+        options: resolved.options || [],
+        currentValue: node.editor?.current_value,
+        step: resolved.step,
+        scale: resolved.scale,
+        limits: resolved.limits
+      };
+    }
+
     if (node.editor) {
       const explicitType = node.editor.type || 'enum';
       return {
@@ -574,10 +587,16 @@ window.CarelMenuWidget = (() => {
   }
 
   function isMenuNodeModbusBacked(node) {
+    if (node?.resolved_editor) {
+      return node.resolved_editor.modbus_backed;
+    }
     return ['A', 'I', 'D'].includes(node?.register?.family);
   }
 
   function isMenuNodeWritable(node) {
+    if (node?.resolved_editor) {
+      return node.resolved_editor.writable;
+    }
     return node?.register?.access === 'R/W';
   }
 
@@ -590,6 +609,10 @@ window.CarelMenuWidget = (() => {
   }
 
   function isMenuNodeEditable(node) {
+    if (node?.resolved_editor) {
+      return node.resolved_editor.editable;
+    }
+
     if (['menu', 'caption', 'page_link'].includes(node?.kind)) {
       return false;
     }
@@ -1296,6 +1319,16 @@ window.CarelMenuWidget = (() => {
     const payload = await response.json();
     if (!payload.ok) {
       throw new Error(payload.error || 'Unable to read menu value.');
+    }
+
+    // Merge resolved editor metadata from the API onto the base node so
+    // subsequent UI renders use the authoritative backend metadata.
+    if (payload.resolved_editor) {
+      const baseNode = baseMenuIndex.get(node.path);
+      if (baseNode) {
+        baseNode.resolved_editor = payload.resolved_editor;
+      }
+      node.resolved_editor = payload.resolved_editor;
     }
 
     menuValueStore.set(node.path, payload.value);

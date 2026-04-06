@@ -53,6 +53,27 @@ class TestApiMenuValueGet:
         resp = app_client.get("/api/menu-value?path=")
         assert resp.status_code == 400
 
+    def test_resolved_editor_in_response(self, app_client):
+        resp = app_client.get("/api/menu-value?path=2.1&refresh=1")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        editor = data["resolved_editor"]
+        assert editor["type"] == "float"
+        assert editor["modbus_backed"] is True
+        assert editor["writable"] is True
+        assert editor["editable"] is True
+        assert editor["scale"] == 10.0
+        assert editor["limits"]["low"] == -20.0
+        assert editor["limits"]["high"] == 100.0
+
+    def test_resolved_editor_boolean(self, app_client):
+        resp = app_client.get("/api/menu-value?path=2.2&refresh=1")
+        assert resp.status_code == 200
+        data = resp.get_json()
+        editor = data["resolved_editor"]
+        assert editor["type"] == "boolean"
+        assert len(editor["options"]) == 2
+
 
 # ── POST /api/menu-value ─────────────────────────────────────────────────
 

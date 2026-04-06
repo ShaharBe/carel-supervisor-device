@@ -233,6 +233,88 @@ def is_menu_node_writable(node: dict[str, Any]) -> bool:
     return isinstance(register, dict) and register.get("access") == "R/W"
 
 
+def resolve_node_editor(node: dict[str, Any]) -> dict[str, Any]:
+    """Build the fully-resolved editor metadata for a menu node.
+
+    Returns a dict with ``type``, ``options``, ``scale``, ``limits``,
+    ``step`` plus capability flags ``editable``, ``modbus_backed``, and
+    ``writable``.
+    """
+    editor_type = infer_menu_editor_type(node)
+    modbus_backed = is_menu_node_modbus_backed(node)
+    writable = is_menu_node_writable(node)
+    kind = node.get("kind", "leaf")
+
+    if editor_type is None:
+        return {
+            "type": None,
+            "options": [],
+            "scale": 1.0,
+            "limits": None,
+            "step": None,
+            "editable": False,
+            "modbus_backed": modbus_backed,
+            "writable": writable,
+        }
+
+    explicit_editor = node.get("editor") if isinstance(node.get("editor"), dict) else None
+
+    # --- options ---
+    if explicit_editor and isinstance(explicit_editor.get("options"), list):
+        options = normalize_editor_options(node)
+    elif editor_type == "boolean":
+        tokens = parse_choice_tokens(str(node.get("range_or_options") or ""))
+        labels = tokens[:2] if len(tokens) >= 2 else ["yes", "no"]
+        options = [
+            {"value": True, "label": labels[0]},
+            {"value": False, "label": labels[1]},
+        ]
+    elif editor_type == "enum":
+        options = normalize_editor_options(node)
+    else:
+        options = []
+
+    # --- scale & limits ---
+    scale = infer_menu_numeric_scale(node, editor_type)
+    low, high = infer_menu_numeric_limits(node)
+    limits = {"low": low, "high": high} if low is not None and high is not None else None
+
+    # --- step ---
+    if explicit_editor and explicit_editor.get("step"):
+        step = explicit_editor["step"]
+    elif editor_type == "float":
+        step = "any"
+    elif editor_type == "integer":
+        step = "1"
+    else:
+        step = None
+
+    # --- editable ---
+    if kind in ("menu", "caption", "page_link"):
+        editable = False
+    elif modbus_backed:
+        editable = writable
+    else:
+        editable = True
+
+    return {
+        "type": editor_type,
+        "options": options,
+        "scale": scale,
+        "limits": limits,
+        "step": step,
+        "editable": editable,
+        "modbus_backed": modbus_backed,
+        "writable": writable,
+    }
+
+
+def annotate_menu_tree(root: dict[str, Any]) -> None:
+    """Walk the tree and attach ``resolved_editor`` to every node."""
+    for node in walk_menu_nodes(root):
+        node["resolved_editor"] = resolve_node_editor(node)
+
+
 def _cache_menu_value_locked(path: str, *, raw: Any, value: Any, source: str) -> None:
     cache.menu_values[path] = {
         "raw": raw,
@@ -300,6 +382,7 @@ def serialize_menu_value(
         "label": node.get("display_label") or node.get("title") or node.get("path"),
         "writable": is_menu_node_writable(node),
         "modbus_backed": is_menu_node_modbus_backed(node),
+        "resolved_editor": node.get("resolved_editor") or resolve_node_editor(node),
         "value": cached_value.get("value"),
         "raw": cached_value.get("raw"),
         "source": cached_value.get("source"),
