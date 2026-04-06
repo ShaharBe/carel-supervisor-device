@@ -55,6 +55,38 @@ class TestReadInfoBlock:
         assert isinstance(result.data["info_voltage_type"], int)
         assert result.data["info_voltage_type"] >= 0
 
+    def test_maps_documented_info_registers_without_off_by_one_shift(self):
+        client = runtime.client
+        original_registers = dict(client._holding_registers)
+
+        try:
+            # Block 1 starts at documented I,136 and block 2 at I,165.
+            client._holding_registers[136] = 2
+            client._holding_registers[137] = 321
+            client._holding_registers[138] = 100
+            client._holding_registers[139] = 0
+            client._holding_registers[140] = 11
+            client._holding_registers[141] = 6
+            client._holding_registers[142] = 12
+            client._holding_registers[165] = 123
+            client._holding_registers[166] = 456
+            client._holding_registers[167] = 4
+
+            result = runtime.read_info_block()
+
+            assert result.ok is True
+            assert result.data["info_conductivity"] == 321
+            assert result.data["info_cyl1_phase"] == 0
+            assert result.data["info_cyl1_status"] == 11
+            assert result.data["info_cyl2_phase"] == 6
+            assert result.data["info_cyl2_status"] == 12
+            assert result.data["info_cyl1_hours"] == 123
+            assert result.data["info_cyl2_hours"] == 456
+            assert result.data["info_voltage_type"] == 4
+        finally:
+            client._holding_registers.clear()
+            client._holding_registers.update(original_registers)
+
 
 class TestReadHumidifierStatusBlock:
     def test_success(self):

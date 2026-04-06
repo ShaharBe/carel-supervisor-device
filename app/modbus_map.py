@@ -120,5 +120,8 @@ RTC_COIL_START = RTC_LATCH_COILS[0]
 RTC_COIL_COUNT = len(RTC_LATCH_COILS)
 RTC_LATCH_PULSE_DELAY_S = 0.15
 
-INFO_BLOCK1_START_ADDR = qmm_to_modbus_addr(INFO_BLOCK1_START_REG)
-INFO_BLOCK2_START_ADDR = qmm_to_modbus_addr(INFO_BLOCK2_START_REG)
+# Keep the info blocks aligned with the documented CAREL register numbers.
+# The reverse-engineering monitor tools and verified hardware reads use
+# direct addresses here, so these starts must remain pass-through.
+INFO_BLOCK1_START_ADDR = INFO_BLOCK1_START_REG
+INFO_BLOCK2_START_ADDR = INFO_BLOCK2_START_REG

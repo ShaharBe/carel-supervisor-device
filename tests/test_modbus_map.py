@@ -74,7 +74,7 @@ class TestDerivedConstants:
         assert RTC_READ_START_ADDR == 153
 
     def test_info_block1_start_addr(self):
-        assert INFO_BLOCK1_START_ADDR == 135
+        assert INFO_BLOCK1_START_ADDR == 136
 
     def test_info_block2_start_addr(self):
-        assert INFO_BLOCK2_START_ADDR == 164
+        assert INFO_BLOCK2_START_ADDR == 165
