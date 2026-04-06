@@ -12,6 +12,7 @@ window.CarelMenuWidget = (() => {
   let menuValueRequestSequence = 0;
   const measureUnitsPath = '3.2.1.5';
   let menuRuleDriverPaths = [];
+  let dashboardSyncMap = {};
   let lastMenuRuleDriverRefreshAt = 0;
   const menuRuleDriverRefreshIntervalMs = 5000;
     const unitProfiles = {
@@ -154,6 +155,7 @@ window.CarelMenuWidget = (() => {
     baseMenuPayload = parseMenuPayload();
     baseMenuIndex = new Map();
     indexMenuTree(baseMenuPayload.root, null, baseMenuIndex);
+    dashboardSyncMap = baseMenuPayload.dashboard_sync_map || {};
     menuRuleDriverPaths = collectMenuRuleDriverPaths();
     rebuildRuntimeMenuTree();
     menuCurrentPath = '';
@@ -666,45 +668,23 @@ window.CarelMenuWidget = (() => {
     return getDefaultNumericValue(node, editor);
   }
 
+  function resolveDotPath(obj, dotPath) {
+    let current = obj;
+    for (const key of dotPath.split('.')) {
+      if (current == null || typeof current !== 'object') {
+        return undefined;
+      }
+      current = current[key];
+    }
+    return current;
+  }
+
   function syncMenuCacheFromDashboard(payload) {
-    if (payload.last_setpoint_c !== null && payload.last_setpoint_c !== undefined) {
-      menuValueStore.set('2.1', payload.last_setpoint_c);
-    }
-
-    if (payload.info?.humidifier_network_enabled !== null && payload.info?.humidifier_network_enabled !== undefined) {
-      menuValueStore.set('2.2', payload.info.humidifier_network_enabled);
-    }
-
-    if (payload.max_production_pct !== null && payload.max_production_pct !== undefined) {
-      menuValueStore.set('2.3', payload.max_production_pct);
-    }
-
-    if (payload.prop_band_c !== null && payload.prop_band_c !== undefined) {
-      menuValueStore.set('2.4', payload.prop_band_c);
-    }
-
-    if (payload.info?.humidifier_status !== null && payload.info?.humidifier_status !== undefined) {
-      menuValueStore.set('4.1', payload.info.humidifier_status);
-    }
-
-    if (payload.info?.conductivity !== null && payload.info?.conductivity !== undefined) {
-      menuValueStore.set('4.6', payload.info.conductivity);
-    }
-
-    if (payload.info?.cyl1_hours !== null && payload.info?.cyl1_hours !== undefined) {
-      menuValueStore.set('5.2', payload.info.cyl1_hours);
-    }
-
-    if (payload.device_time_display) {
-      menuValueStore.set('5.4', payload.device_time_display);
-    }
-
-    if (payload.info?.cyl1_status !== null && payload.info?.cyl1_status !== undefined) {
-      menuValueStore.set('6.2', payload.info.cyl1_status);
-    }
-
-    if (payload.info?.cyl1_phase !== null && payload.info?.cyl1_phase !== undefined) {
-      menuValueStore.set('6.3', payload.info.cyl1_phase);
+    for (const [menuPath, payloadKey] of Object.entries(dashboardSyncMap)) {
+      const value = resolveDotPath(payload, payloadKey);
+      if (value !== null && value !== undefined) {
+        menuValueStore.set(menuPath, value);
+      }
     }
   }
 

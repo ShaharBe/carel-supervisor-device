@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from menu_service import annotate_menu_tree, resolve_node_editor
+from menu_service import annotate_menu_tree, collect_dashboard_sync_map, resolve_node_editor
 
 
 # ── helper ───────────────────────────────────────────────────────────────
@@ -249,3 +249,93 @@ class TestAnnotateMenuTree:
         assert editor["type"] == "boolean"
         assert editor["options"][0]["label"] == "Auto"
         assert editor["options"][1]["label"] == "Off"
+
+
+# ── collect_dashboard_sync_map ───────────────────────────────────────────
+
+class TestCollectDashboardSyncMap:
+    def test_collects_all_annotated_nodes(self, menu_root):
+        sync_map = collect_dashboard_sync_map(menu_root)
+        assert isinstance(sync_map, dict)
+        assert len(sync_map) == 10
+
+    def test_setpoint_mapping(self, menu_root):
+        sync_map = collect_dashboard_sync_map(menu_root)
+        assert sync_map["2.1"] == "last_setpoint_c"
+
+    def test_humidifier_mapping(self, menu_root):
+        sync_map = collect_dashboard_sync_map(menu_root)
+        assert sync_map["2.2"] == "info.humidifier_network_enabled"
+
+    def test_nested_info_mappings(self, menu_root):
+        sync_map = collect_dashboard_sync_map(menu_root)
+        assert sync_map["4.1"] == "info.humidifier_status"
+        assert sync_map["4.6"] == "info.conductivity"
+        assert sync_map["5.2"] == "info.cyl1_hours"
+        assert sync_map["6.2"] == "info.cyl1_status"
+        assert sync_map["6.3"] == "info.cyl1_phase"
+
+    def test_device_time_mapping(self, menu_root):
+        sync_map = collect_dashboard_sync_map(menu_root)
+        assert sync_map["5.4"] == "device_time_display"
+
+    def test_empty_tree_returns_empty(self):
+        root = {"path": "", "kind": "root", "children": []}
+        assert collect_dashboard_sync_map(root) == {}
+
+    def test_ignores_nodes_without_annotation(self):
+        root = {
+            "path": "",
+            "kind": "root",
+            "children": [
+                {"path": "1.1", "kind": "leaf", "children": []},
+                {"path": "1.2", "kind": "leaf", "children": [], "dashboard_sync": "some_key"},
+            ],
+        }
+        sync_map = collect_dashboard_sync_map(root)
+        assert sync_map == {"1.2": "some_key"}
+
+
+# ── collect_dashboard_sync_map ───────────────────────────────────────────
+
+class TestCollectDashboardSyncMap:
+    def test_collects_all_annotated_nodes(self, menu_root):
+        sync_map = collect_dashboard_sync_map(menu_root)
+        assert isinstance(sync_map, dict)
+        assert len(sync_map) == 10
+
+    def test_setpoint_mapping(self, menu_root):
+        sync_map = collect_dashboard_sync_map(menu_root)
+        assert sync_map["2.1"] == "last_setpoint_c"
+
+    def test_humidifier_mapping(self, menu_root):
+        sync_map = collect_dashboard_sync_map(menu_root)
+        assert sync_map["2.2"] == "info.humidifier_network_enabled"
+
+    def test_nested_info_mappings(self, menu_root):
+        sync_map = collect_dashboard_sync_map(menu_root)
+        assert sync_map["4.1"] == "info.humidifier_status"
+        assert sync_map["4.6"] == "info.conductivity"
+        assert sync_map["5.2"] == "info.cyl1_hours"
+        assert sync_map["6.2"] == "info.cyl1_status"
+        assert sync_map["6.3"] == "info.cyl1_phase"
+
+    def test_device_time_mapping(self, menu_root):
+        sync_map = collect_dashboard_sync_map(menu_root)
+        assert sync_map["5.4"] == "device_time_display"
+
+    def test_empty_tree_returns_empty(self):
+        root = {"path": "", "kind": "root", "children": []}
+        assert collect_dashboard_sync_map(root) == {}
+
+    def test_ignores_nodes_without_annotation(self):
+        root = {
+            "path": "",
+            "kind": "root",
+            "children": [
+                {"path": "1.1", "kind": "leaf", "children": []},
+                {"path": "1.2", "kind": "leaf", "children": [], "dashboard_sync": "some_key"},
+            ],
+        }
+        sync_map = collect_dashboard_sync_map(root)
+        assert sync_map == {"1.2": "some_key"}

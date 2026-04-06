@@ -196,3 +196,28 @@ class TestApiReboot:
         data = resp.get_json()
         assert data["ok"] is False
         assert "simulator" in data["error"].lower() or "disabled" in data["error"].lower()
+
+
+# ── GET / (page payload includes dashboard_sync_map) ─────────────────────
+
+class TestIndexPayload:
+    def test_dashboard_sync_map_in_page(self, app_client):
+        resp = app_client.get("/")
+        assert resp.status_code == 200
+        html = resp.data.decode("utf-8")
+        # The menu payload is embedded as JSON in a <script> tag.
+        import re
+        match = re.search(
+            r'<script id="displayMenuData"[^>]*>(.*?)</script>',
+            html,
+            re.DOTALL,
+        )
+        assert match, "displayMenuData script tag not found"
+        payload = json.loads(match.group(1))
+        assert payload["ok"] is True
+        sync_map = payload["dashboard_sync_map"]
+        assert isinstance(sync_map, dict)
+        assert sync_map["2.1"] == "last_setpoint_c"
+        assert sync_map["2.2"] == "info.humidifier_network_enabled"
+        assert sync_map["4.1"] == "info.humidifier_status"
+        assert len(sync_map) == 10

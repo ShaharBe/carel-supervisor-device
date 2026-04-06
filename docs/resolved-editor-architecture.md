@@ -136,6 +136,7 @@ All live in `menu_service.py`.
 |---|---|
 | `resolve_node_editor(node)` | Builds the `resolved_editor` dict for one node |
 | `annotate_menu_tree(root)` | Walks the tree and attaches `resolved_editor` to every node |
+| `collect_dashboard_sync_map(root)` | Collects `dashboard_sync` annotations into `{path: key}` map |
 | `infer_menu_editor_type(node)` | Determines `type` from register family, hints, and explicit editor |
 | `infer_menu_numeric_scale(node, editor_type)` | Determines `scale` from path overrides, hints, and defaults |
 | `infer_menu_numeric_limits(node)` | Determines `limits` from path overrides and range hints |
@@ -147,8 +148,33 @@ All live in `menu_service.py`.
 | Surface | Source | Timing |
 |---|---|---|
 | Page load (menu tree) | `annotate_menu_tree()` in the `GET /` route | Once, at page render |
+| Page load (sync map) | `collect_dashboard_sync_map()` in the `GET /` route | Once, at page render |
 | Value read | `serialize_menu_value()` in `GET /api/menu-value` | Every value fetch |
 | Value write | `serialize_menu_value()` in `POST /api/menu-value` | Every write response |
+
+## Dashboard Sync Map
+
+Menu nodes that should be pre-populated from the periodic dashboard poll
+carry a `"dashboard_sync"` property in `display_menu.json`.  The value is
+a dot-path into the `/api/temp` response (e.g. `"last_setpoint_c"`,
+`"info.humidifier_status"`).
+
+At page render the backend calls `collect_dashboard_sync_map(root)` which
+walks the tree, collects every `dashboard_sync` annotation, and returns a
+`{menu_path: payload_key}` dict.  This is included in the page payload as
+`dashboard_sync_map`.
+
+The frontend stores this map at init and `syncMenuCacheFromDashboard()`
+iterates over it with a generic dot-path resolver — no hardcoded path
+strings in JS.
+
+To add a new dashboard-synced value:
+
+1. Add `"dashboard_sync": "<payload_key>"` to the node in `display_menu.json`.
+2. Ensure `/api/temp` already returns the value at that key.
+3. No Python or JS code changes needed.
+
+See `docs/menu-path-conventions.md` for the full mapping table.
 
 ## Frontend Fallback
 

@@ -315,6 +315,16 @@ def annotate_menu_tree(root: dict[str, Any]) -> None:
         node["resolved_editor"] = resolve_node_editor(node)
 
 
+def collect_dashboard_sync_map(root: dict[str, Any]) -> dict[str, str]:
+    """Build ``{menu_path: dashboard_payload_key}`` from ``dashboard_sync`` annotations."""
+    sync_map: dict[str, str] = {}
+    for node in walk_menu_nodes(root):
+        key = node.get("dashboard_sync")
+        if isinstance(key, str) and key:
+            sync_map[str(node["path"])] = key
+    return sync_map
+
+
 def _cache_menu_value_locked(path: str, *, raw: Any, value: Any, source: str) -> None:
     cache.menu_values[path] = {
         "raw": raw,

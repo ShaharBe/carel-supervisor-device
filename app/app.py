@@ -31,6 +31,7 @@ from menu_service import (
     SETPOINT_FIELD,
     annotate_menu_tree,
     coerce_menu_write,
+    collect_dashboard_sync_map,
     ensure_dashboard_config_cache,
     format_limit,
     handle_humidifier_toggle,
@@ -119,6 +120,7 @@ def index() -> str:
     menu_payload = load_display_menu()
     if menu_payload.get("ok"):
         annotate_menu_tree(menu_payload["root"])
+        menu_payload["dashboard_sync_map"] = collect_dashboard_sync_map(menu_payload["root"])
     return render_template(
         "index.html",
         APP_TITLE=app_title,
