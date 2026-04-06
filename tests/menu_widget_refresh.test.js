@@ -2,6 +2,110 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createMenuWidgetHarness } = require('./menu_widget_harness');
 
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((innerResolve, innerReject) => {
+    resolve = innerResolve;
+    reject = innerReject;
+  });
+  return { promise, resolve, reject };
+}
+
+function flushAsyncWork() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+function buildMenuValueResponse(path, value, extra = {}) {
+  return {
+    json: async () => ({
+      ok: true,
+      path,
+      value,
+      ...extra
+    })
+  };
+}
+
+function createVisibilityReconciliationPayload() {
+  return {
+    ok: true,
+    error: null,
+    source_path: 'test',
+    dashboard_sync_map: {
+      '1': 'advanced_enabled'
+    },
+    root: {
+      path: '',
+      title: 'Root',
+      display_label: 'Root',
+      raw_text: 'Root',
+      kind: 'root',
+      children: [
+        {
+          path: '1',
+          title: 'Advanced Enabled',
+          display_label: 'Advanced Enabled',
+          raw_text: 'Advanced Enabled',
+          kind: 'leaf',
+          children: [],
+          register: null,
+          dashboard_sync: 'advanced_enabled',
+          range_or_options: null,
+          note: null,
+          is_caption: false,
+          is_stub: false,
+          page_direction: null
+        },
+        {
+          path: '2',
+          title: 'Advanced',
+          display_label: 'Advanced',
+          raw_text: 'Advanced',
+          kind: 'menu',
+          children: [
+            {
+              path: '2.1',
+              title: 'Gain',
+              display_label: 'Gain',
+              raw_text: 'Gain (A,1,R/W)',
+              kind: 'leaf',
+              children: [],
+              register: {
+                family: 'A',
+                index: 1,
+                access: 'R/W'
+              },
+              range_or_options: '0...10',
+              note: null,
+              is_caption: false,
+              is_stub: false,
+              page_direction: null
+            }
+          ],
+          register: null,
+          visible_if: {
+            path: '1',
+            operator: 'equals',
+            values: [1]
+          },
+          range_or_options: null,
+          note: null,
+          is_caption: false,
+          is_stub: false,
+          page_direction: null
+        }
+      ],
+      register: null,
+      range_or_options: null,
+      note: null,
+      is_caption: false,
+      is_stub: false,
+      page_direction: null
+    }
+  };
+}
+
 test('dashboard refresh re-fetches visible remote leaves in the active menu', async () => {
   const harness = createMenuWidgetHarness();
   const { widget, fetchCalls } = harness;
@@ -101,4 +205,141 @@ test('rule-driver refresh makes dependent leaves visible when the driver changes
   assert.ok(childPaths.includes('3.2.2.6'));
   assert.ok(childPaths.includes('3.2.2.7'));
   assert.ok(childPaths.includes('3.2.2.8'));
+});
+
+test('navigating away cancels the remaining refresh queue for the previous menu', async () => {
+  const firstLeafDeferred = createDeferred();
+  let holdPreviousMenuFetch = true;
+  const harness = createMenuWidgetHarness({
+    fetchImpl: async (url) => {
+      const parsed = new URL(String(url), 'http://localhost/');
+      const pathValue = parsed.searchParams.get('path');
+      if (pathValue === '3.2.2.2' && holdPreviousMenuFetch) {
+        return {
+          json: async () => {
+            await firstLeafDeferred.promise;
+            return {
+              ok: true,
+              path: pathValue,
+              value: 10
+            };
+          }
+        };
+      }
+      return buildMenuValueResponse(pathValue, 0);
+    }
+  });
+  const { widget, fetchCalls } = harness;
+  widget.init();
+  await flushAsyncWork();
+  await flushAsyncWork();
+
+  harness.clearFetchCalls();
+
+  widget.__testing.navigateToMenu('3.2.2');
+  assert.ok(
+    fetchCalls.some((url) => url.includes('path=3.2.2.2')),
+    `expected first previous-menu leaf fetch to start, got: ${fetchCalls.join(', ')}`
+  );
+
+  widget.__testing.navigateToMenu('3.2.1');
+  assert.equal(widget.__testing.getCurrentMenuPath(), '3.2.1');
+  assert.ok(
+    fetchCalls.some((url) => url.includes('path=3.2.1.1')),
+    `expected new menu fetches to start after navigation, got: ${fetchCalls.join(', ')}`
+  );
+
+  holdPreviousMenuFetch = false;
+  firstLeafDeferred.resolve();
+  await flushAsyncWork();
+  await flushAsyncWork();
+
+  assert.equal(widget.__testing.getCurrentMenuPath(), '3.2.1');
+  assert.ok(
+    !fetchCalls.some((url) => url.includes('path=3.2.2.3')),
+    `expected remaining old-menu queue to stop after navigation, got: ${fetchCalls.join(', ')}`
+  );
+});
+
+test('backend resolved editor metadata overrides local editor inference after refresh', async () => {
+  const resolvedEditor = {
+    type: 'enum',
+    options: [
+      { value: 0, label: 'Disabled' },
+      { value: 1, label: 'Enabled' }
+    ],
+    step: null,
+    scale: 1,
+    limits: { min: 0, max: 1 },
+    editable: true,
+    writable: true,
+    modbus_backed: true
+  };
+  const harness = createMenuWidgetHarness({
+    fetchImpl: async (url) => {
+      const parsed = new URL(String(url), 'http://localhost/');
+      const pathValue = parsed.searchParams.get('path');
+      if (pathValue === '3.2.2.2') {
+        return buildMenuValueResponse(pathValue, 1, { resolved_editor: resolvedEditor });
+      }
+      return buildMenuValueResponse(pathValue, 0);
+    }
+  });
+  const { widget } = harness;
+  widget.init();
+  widget.__testing.setCurrentMenuPath('3.2.2');
+
+  await widget.handleDashboardRefresh({ ok: true, info: {}, alarms: {} });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(widget.__testing.getNode('3.2.2.2').resolved_editor)), resolvedEditor);
+  const leafEditor = JSON.parse(JSON.stringify(widget.__testing.getLeafEditor('3.2.2.2')));
+  assert.equal(leafEditor.type, 'enum');
+  assert.deepEqual(leafEditor.options, resolvedEditor.options);
+  assert.equal(leafEditor.step, null);
+  assert.equal(leafEditor.scale, 1);
+  assert.deepEqual(leafEditor.limits, { min: 0, max: 1 });
+});
+
+test('dashboard refresh reconciles the current menu when it becomes hidden', async () => {
+  const harness = createMenuWidgetHarness({
+    payload: createVisibilityReconciliationPayload()
+  });
+  const { widget } = harness;
+  widget.init();
+
+  await widget.handleDashboardRefresh({ ok: true, advanced_enabled: 1, info: {}, alarms: {} });
+  assert.ok(widget.__testing.getCurrentMenuChildPaths().includes('2'));
+
+  widget.__testing.setCurrentMenuPath('2');
+  assert.equal(widget.__testing.getCurrentMenuPath(), '2');
+
+  await widget.handleDashboardRefresh({ ok: true, advanced_enabled: 0, info: {}, alarms: {} });
+
+  assert.equal(widget.__testing.getCurrentMenuPath(), '');
+  assert.ok(
+    !widget.__testing.getCurrentMenuChildPaths().includes('2'),
+    'expected hidden menu to disappear after rule-driver refresh'
+  );
+});
+
+test('measure-unit rule refresh updates runtime units and decorated range hints', async () => {
+  const harness = createMenuWidgetHarness({
+    fetchImpl: async (url) => {
+      const parsed = new URL(String(url), 'http://localhost/');
+      const pathValue = parsed.searchParams.get('path');
+      const valueByPath = {
+        '3.2.1.1': 0,
+        '3.2.1.5': true
+      };
+      return buildMenuValueResponse(pathValue, valueByPath[pathValue] ?? 0);
+    }
+  });
+  const { widget } = harness;
+  widget.init();
+  widget.__testing.setCurrentMenuPath('2');
+
+  await widget.handleDashboardRefresh({ ok: true, info: {}, alarms: {} });
+
+  assert.equal(widget.__testing.getNode('2.1').display_unit, '°F');
+  assert.equal(widget.__testing.getNode('2.4').display_range_or_options, '2..19.9 °F');
 });

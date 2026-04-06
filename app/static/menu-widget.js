@@ -1602,11 +1602,17 @@ window.CarelMenuWidget = (() => {
         menuSelectedIndex = findSelectableChildIndex(menuNode, null);
         renderMenuWidget();
       },
+      getCurrentMenuPath() {
+        return menuCurrentPath;
+      },
       getStoredValue(path) {
         return menuValueStore.get(path);
       },
       getCurrentMenuChildPaths() {
         return getCurrentMenuChildren().map((child) => child.path);
+      },
+      getLeafEditor(path) {
+        return getLeafEditor(getMenuNode(path));
       },
       getNode(path) {
         return getMenuNode(path);
