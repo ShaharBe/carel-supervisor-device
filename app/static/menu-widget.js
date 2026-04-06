@@ -1506,6 +1506,9 @@ window.CarelMenuWidget = (() => {
     await refreshMenuRuleDrivers();
     rebuildRuntimeMenuTree();
     renderMenuWidget();
+    if (!menuEditState.open) {
+      await refreshVisibleMenuLeafValues(true);
+    }
   }
 
   function bindEventListeners() {
@@ -1590,6 +1593,15 @@ window.CarelMenuWidget = (() => {
 
   return {
     init,
-    handleDashboardRefresh
+    handleDashboardRefresh,
+    __testing: {
+      navigateToMenu,
+      setCurrentMenuPath(path) {
+        const menuNode = getMenuNode(path);
+        menuCurrentPath = menuNode.path;
+        menuSelectedIndex = findSelectableChildIndex(menuNode, null);
+        renderMenuWidget();
+      }
+    }
   };
 })();
