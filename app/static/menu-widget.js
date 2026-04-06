@@ -22,6 +22,7 @@ window.CarelMenuWidget = (() => {
         amps: 'A',
         percent: '%',
         hours: 'h',
+        seconds: 'sec',
         days: 'd',
         conductivity: 'uS/cm'
       },
@@ -31,6 +32,7 @@ window.CarelMenuWidget = (() => {
         amps: 'A',
         percent: '%',
         hours: 'h',
+        seconds: 'sec',
         days: 'd',
         conductivity: 'uS/cm'
       }

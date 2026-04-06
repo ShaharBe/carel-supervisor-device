@@ -1018,8 +1018,64 @@
               "title": "Supervisor",
               "display_label": "Supervisor",
               "raw_text": "Supervisor",
-              "kind": "leaf",
-              "children": [],
+              "kind": "menu",
+              "children": [
+                {
+                  "path": "3.2.8.1",
+                  "title": "Enable ON/OFF from supervisor",
+                  "display_label": "Enable ON/OFF from supervisor",
+                  "raw_text": "Enable ON/OFF from supervisor (D,81,R/W) [Yes/No] 1=enable",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "D",
+                    "index": 81,
+                    "access": "R/W"
+                  },
+                  "range_or_options": "Yes/No",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.8.2",
+                  "title": "Reg. from BMS",
+                  "display_label": "Reg. from BMS",
+                  "raw_text": "Reg. from BMS (D,80,R/W) [Yes/No] Note: Enabling control supervisor",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "D",
+                    "index": 80,
+                    "access": "R/W"
+                  },
+                  "range_or_options": "Yes/No",
+                  "note": "Enabling control supervisor",
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.2.8.3",
+                  "title": "Offline alert delay",
+                  "display_label": "Offline alert delay",
+                  "raw_text": "Offline alert delay [sec] (I,182,R/W)",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "I",
+                    "index": 182,
+                    "access": "R/W"
+                  },
+                  "quantity": "seconds",
+                  "range_or_options": "sec",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                }
+              ],
               "register": null,
               "range_or_options": null,
               "note": null,
