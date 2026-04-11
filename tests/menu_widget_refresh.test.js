@@ -177,6 +177,46 @@ test('dashboard refresh syncs dashboard-backed values into the menu cache', asyn
   );
 });
 
+test('restores menu location from session storage after reinitialization', () => {
+  const sessionStorageStore = new Map();
+  let harness = createMenuWidgetHarness({ sessionStorageStore });
+  let { widget } = harness;
+  widget.init();
+
+  widget.__testing.navigateToMenu('3.2');
+  widget.__testing.moveMenuSelection(1);
+
+  const storedLocation = JSON.parse(sessionStorageStore.get('carel-menu-location'));
+  assert.equal(storedLocation.path, '3.2');
+  assert.equal(storedLocation.selectedIndex, 1);
+
+  harness = createMenuWidgetHarness({ sessionStorageStore });
+  widget = harness.widget;
+  widget.init();
+
+  assert.equal(widget.__testing.getCurrentMenuPath(), '3.2');
+  assert.equal(widget.__testing.getSelectedIndex(), 1);
+});
+
+test('ignores stored menu location when the path is hidden', () => {
+  const sessionStorageStore = new Map([
+    ['carel-menu-location', JSON.stringify({ path: '2', selectedIndex: 0 })]
+  ]);
+  const harness = createMenuWidgetHarness({
+    payload: createVisibilityReconciliationPayload(),
+    sessionStorageStore
+  });
+  const { widget } = harness;
+
+  widget.init();
+
+  assert.equal(widget.__testing.getCurrentMenuPath(), '');
+  assert.ok(
+    !widget.__testing.getCurrentMenuChildPaths().includes('2'),
+    'expected hidden stored menu path not to be restored'
+  );
+});
+
 test('rule-driver refresh makes dependent leaves visible when the driver changes', async () => {
   const harness = createMenuWidgetHarness({
     fetchImpl: async (url) => {

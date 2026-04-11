@@ -140,13 +140,28 @@ function createDocument(payload) {
   };
 }
 
-function createWindow(document) {
+function createStorage(store = new Map()) {
+  return {
+    getItem(key) {
+      return store.has(key) ? store.get(key) : null;
+    },
+    setItem(key, value) {
+      store.set(key, String(value));
+    },
+    removeItem(key) {
+      store.delete(key);
+    },
+    clear() {
+      store.clear();
+    }
+  };
+}
+
+function createWindow(document, options = {}) {
   return {
     document,
-    localStorage: {
-      getItem: () => null,
-      setItem: () => {}
-    },
+    localStorage: options.localStorage || createStorage(options.localStorageStore),
+    sessionStorage: options.sessionStorage || createStorage(options.sessionStorageStore),
     matchMedia: () => ({ matches: false }),
     addEventListener: () => {}
   };
@@ -166,7 +181,7 @@ function createDefaultFetchResponse(url) {
 function createMenuWidgetHarness(options = {}) {
   const payload = options.payload || buildPayload();
   const document = createDocument(payload);
-  const window = createWindow(document);
+  const window = createWindow(document, options);
   const fetchCalls = [];
   const fetchImpl = options.fetchImpl || (async (url) => createDefaultFetchResponse(url));
 

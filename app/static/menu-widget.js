@@ -50,6 +50,7 @@ window.CarelMenuWidget = (() => {
     widthPercent: 88
   };
   let menuDisplaySettings = { ...defaultMenuDisplaySettings };
+  const menuLocationStorageKey = 'carel-menu-location';
 
   function clampNumber(value, min, max, fallback) {
     const numericValue = Number(value);
@@ -130,6 +131,35 @@ window.CarelMenuWidget = (() => {
     persistMenuDisplaySettings();
   }
 
+  function loadMenuLocation() {
+    try {
+      const saved = window.sessionStorage?.getItem(menuLocationStorageKey);
+      if (!saved) {
+        return null;
+      }
+
+      const location = JSON.parse(saved);
+      const selectedIndex = Number(location?.selectedIndex);
+      return {
+        path: typeof location?.path === 'string' ? location.path : '',
+        selectedIndex: Number.isInteger(selectedIndex) && selectedIndex >= 0 ? selectedIndex : 0
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function persistMenuLocation() {
+    try {
+      window.sessionStorage?.setItem(
+        menuLocationStorageKey,
+        JSON.stringify({ path: menuCurrentPath, selectedIndex: menuSelectedIndex })
+      );
+    } catch (e) {
+      // Ignore storage failures; menu navigation still works for the current page session.
+    }
+  }
+
   function parseMenuPayload() {
     try {
       const node = document.getElementById('displayMenuData');
@@ -160,8 +190,7 @@ window.CarelMenuWidget = (() => {
     dashboardSyncMap = baseMenuPayload.dashboard_sync_map || {};
     menuRuleDriverPaths = collectMenuRuleDriverPaths();
     rebuildRuntimeMenuTree();
-    menuCurrentPath = '';
-    menuSelectedIndex = 0;
+    restoreMenuLocation();
     renderMenuWidget();
     refreshVisibleMenuLeafValues(true);
   }
@@ -298,6 +327,7 @@ window.CarelMenuWidget = (() => {
       if (isMenuNodeAndAncestorsVisible(parentPath)) {
         menuCurrentPath = parentPath;
         menuSelectedIndex = findSelectableChildIndex(getMenuNode(parentPath), currentPath);
+        persistMenuLocation();
         return;
       }
       currentPath = parentPath;
@@ -305,6 +335,7 @@ window.CarelMenuWidget = (() => {
 
     menuCurrentPath = '';
     menuSelectedIndex = 0;
+    persistMenuLocation();
   }
 
   function rebuildRuntimeMenuTree() {
@@ -339,6 +370,27 @@ window.CarelMenuWidget = (() => {
 
   function getMenuNode(path) {
     return menuIndex.get(path) || menuPayload.root;
+  }
+
+  function restoreMenuLocation() {
+    const savedLocation = loadMenuLocation();
+    const savedPath = savedLocation?.path || '';
+    const savedNode = savedPath === '' ? menuPayload?.root : menuIndex.get(savedPath);
+
+    if (!savedLocation || !savedNode || (savedPath !== '' && savedNode.kind !== 'menu')) {
+      menuCurrentPath = '';
+      menuSelectedIndex = 0;
+      return;
+    }
+
+    menuCurrentPath = savedPath;
+    menuSelectedIndex = savedLocation.selectedIndex;
+    if (!isMenuNodeAndAncestorsVisible(menuCurrentPath)) {
+      reconcileMenuLocation();
+      return;
+    }
+
+    clampMenuSelection();
   }
 
   function isMenuNodeVisible(node) {
@@ -1036,11 +1088,13 @@ window.CarelMenuWidget = (() => {
       line.title = child.raw_text;
       line.addEventListener('click', () => {
         menuSelectedIndex = actualIndex;
+        persistMenuLocation();
         renderMenuWidget();
         screen.focus();
       });
       line.addEventListener('dblclick', () => {
         menuSelectedIndex = actualIndex;
+        persistMenuLocation();
         if (isMenuNodeEditable(child)) {
           openMenuEditModal(child);
           return;
@@ -1077,6 +1131,7 @@ window.CarelMenuWidget = (() => {
 
     menuSelectedIndex += delta;
     clampMenuSelection();
+    persistMenuLocation();
     renderMenuWidget();
     document.getElementById('menuScreen').focus();
   }
@@ -1085,6 +1140,7 @@ window.CarelMenuWidget = (() => {
     const menuNode = getMenuNode(path);
     menuCurrentPath = menuNode.path;
     menuSelectedIndex = findSelectableChildIndex(menuNode, preferredChildPath);
+    persistMenuLocation();
     renderMenuWidget();
     refreshVisibleMenuLeafValues(true);
     document.getElementById('menuScreen').focus();
@@ -1598,14 +1654,19 @@ window.CarelMenuWidget = (() => {
     handleDashboardRefresh,
     __testing: {
       navigateToMenu,
+      moveMenuSelection,
       setCurrentMenuPath(path) {
         const menuNode = getMenuNode(path);
         menuCurrentPath = menuNode.path;
         menuSelectedIndex = findSelectableChildIndex(menuNode, null);
+        persistMenuLocation();
         renderMenuWidget();
       },
       getCurrentMenuPath() {
         return menuCurrentPath;
+      },
+      getSelectedIndex() {
+        return menuSelectedIndex;
       },
       getStoredValue(path) {
         return menuValueStore.get(path);
