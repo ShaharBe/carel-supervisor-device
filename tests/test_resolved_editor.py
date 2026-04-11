@@ -266,20 +266,22 @@ def test_probe_config_signed_fields(menu_root):
     from menu_service import walk_menu_nodes
 
     nodes = {node.get("path"): node for node in walk_menu_nodes(menu_root)}
-    integer_paths = ["3.2.2.2", "3.2.2.3", "3.2.2.6", "3.2.2.7"]
-    float_paths = ["3.2.2.4", "3.2.2.8"]
+    temperature_min_max_paths = ["3.2.2.2", "3.2.2.3", "3.2.2.6", "3.2.2.7"]
+    unitless_offset_paths = ["3.2.2.4", "3.2.2.8"]
 
-    for path in integer_paths:
+    for path in temperature_min_max_paths:
         editor = nodes[path]["resolved_editor"]
         assert nodes[path]["register"]["signed"] is True
+        assert nodes[path]["quantity"] == "temperature"
         assert editor["signed"] is True
         assert editor["type"] == "integer"
         assert editor["scale"] == 1.0
         assert editor["limits"] == {"low": -250.0, "high": 250.0}
 
-    for path in float_paths:
+    for path in unitless_offset_paths:
         editor = nodes[path]["resolved_editor"]
         assert nodes[path]["register"]["signed"] is True
+        assert "quantity" not in nodes[path]
         assert editor["signed"] is True
         assert editor["type"] == "float"
         assert editor["scale"] == 10.0
