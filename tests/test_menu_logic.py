@@ -6,10 +6,13 @@ import pytest
 
 from app import (
     coerce_menu_write,
+    decode_menu_register_word,
+    encode_menu_register_word,
     format_limit,
     infer_menu_editor_type,
     infer_menu_numeric_limits,
     infer_menu_numeric_scale,
+    is_menu_register_signed,
     is_menu_node_modbus_backed,
     is_menu_node_writable,
     normalize_editor_options,
@@ -28,10 +31,13 @@ def _leaf(
     range_or_options: str | None = None,
     display_label: str = "Test",
     editor: dict | None = None,
+    signed: bool = False,
 ) -> dict:
     register = None
     if family is not None:
         register = {"family": family, "index": index, "access": access}
+        if signed:
+            register["signed"] = True
     return {
         "path": path,
         "title": display_label,
@@ -237,6 +243,29 @@ class TestMenuNodePredicates:
     def test_not_writable_without_register(self):
         assert is_menu_node_writable(_leaf()) is False
 
+    def test_signed_register_metadata(self):
+        assert is_menu_register_signed(_leaf(family="A", signed=True)) is True
+        assert is_menu_register_signed(_leaf(family="A")) is False
+
+
+# â”€â”€ signed register encoding â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+class TestSignedRegisterEncoding:
+    def test_decode_signed_16_bit_word(self):
+        assert decode_menu_register_word(65535, signed=True) == -1
+        assert decode_menu_register_word(65526, signed=True) == -10
+
+    def test_decode_unsigned_word_unchanged(self):
+        assert decode_menu_register_word(65535, signed=False) == 65535
+
+    def test_encode_signed_16_bit_word(self):
+        assert encode_menu_register_word(-1, signed=True) == 65535
+        assert encode_menu_register_word(-10, signed=True) == 65526
+
+    def test_signed_out_of_range_raises(self):
+        with pytest.raises(ValueError, match="signed 16-bit range"):
+            encode_menu_register_word(-32769, signed=True)
+
 
 # ── format_limit ─────────────────────────────────────────────────────────
 
@@ -301,11 +330,35 @@ class TestCoerceMenuWrite:
         assert value == 500
         assert raw == 500
 
+    def test_signed_integer_node_encodes_negative_word(self):
+        node = _leaf(
+            path="99.1",
+            family="A",
+            range_or_options="-250...250",
+            editor={"type": "integer", "scale": 1},
+            signed=True,
+        )
+        value, raw = coerce_menu_write(node, "-1")
+        assert value == -1
+        assert raw == 65535
+
     def test_float_node_with_scaling(self):
         node = _leaf(path="2.1", family="A", range_or_options="-20..100", display_label="Setpoint")
         value, raw = coerce_menu_write(node, "28.0")
         assert raw == 280
         assert abs(value - 28.0) < 0.01
+
+    def test_signed_float_node_encodes_negative_scaled_word(self):
+        node = _leaf(
+            path="99.1",
+            family="A",
+            range_or_options="-250.0...250.0",
+            editor={"type": "float", "scale": 10},
+            signed=True,
+        )
+        value, raw = coerce_menu_write(node, "-0.1")
+        assert abs(value - -0.1) < 0.01
+        assert raw == 65535
 
     def test_out_of_range_raises(self):
         node = _leaf(path="99.1", family="I", range_or_options="0...100")

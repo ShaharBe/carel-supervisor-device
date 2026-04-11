@@ -18,10 +18,13 @@ def _leaf(
     range_or_options: str | None = None,
     display_label: str = "Test",
     editor: dict | None = None,
+    signed: bool = False,
 ) -> dict:
     register = None
     if family is not None:
         register = {"family": family, "index": index, "access": access}
+        if signed:
+            register["signed"] = True
     return {
         "path": path,
         "title": display_label,
@@ -197,6 +200,11 @@ class TestResolvedEditorScaleLimits:
         result = resolve_node_editor(node)
         assert result["step"] == 0.01
 
+    def test_signed_register_flag(self):
+        node = _leaf(family="A", signed=True, editor={"type": "float", "scale": 10})
+        result = resolve_node_editor(node)
+        assert result["signed"] is True
+
 
 # ── annotate_menu_tree ───────────────────────────────────────────────────
 
@@ -252,6 +260,31 @@ class TestAnnotateMenuTree:
 
 
 # ── collect_dashboard_sync_map ───────────────────────────────────────────
+
+def test_probe_config_signed_fields(menu_root):
+    annotate_menu_tree(menu_root)
+    from menu_service import walk_menu_nodes
+
+    nodes = {node.get("path"): node for node in walk_menu_nodes(menu_root)}
+    integer_paths = ["3.2.2.2", "3.2.2.3", "3.2.2.6", "3.2.2.7"]
+    float_paths = ["3.2.2.4", "3.2.2.8"]
+
+    for path in integer_paths:
+        editor = nodes[path]["resolved_editor"]
+        assert nodes[path]["register"]["signed"] is True
+        assert editor["signed"] is True
+        assert editor["type"] == "integer"
+        assert editor["scale"] == 1.0
+        assert editor["limits"] == {"low": -250.0, "high": 250.0}
+
+    for path in float_paths:
+        editor = nodes[path]["resolved_editor"]
+        assert nodes[path]["register"]["signed"] is True
+        assert editor["signed"] is True
+        assert editor["type"] == "float"
+        assert editor["scale"] == 10.0
+        assert editor["limits"] == {"low": -250.0, "high": 250.0}
+
 
 class TestCollectDashboardSyncMap:
     def test_collects_all_annotated_nodes(self, menu_root):

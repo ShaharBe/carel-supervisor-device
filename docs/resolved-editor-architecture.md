@@ -116,6 +116,10 @@ the node in two places:
   // editor.step in the JSON definition.
   "step": "any",
 
+  // Whether the Modbus register word is interpreted as signed int16
+  // two's-complement before applying scale.
+  "signed": true,
+
   // Whether the UI should offer an edit control for this node.
   // false for menus, captions, page_links, and read-only Modbus leaves.
   "editable": true,

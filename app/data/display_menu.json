@@ -380,10 +380,15 @@
                   "register": {
                     "family": "A",
                     "index": 2,
-                    "access": "R/W"
+                    "access": "R/W",
+                    "signed": true
+                  },
+                  "editor": {
+                    "type": "integer",
+                    "scale": 1
                   },
                   "quantity": "percent",
-                  "range_or_options": "0...250",
+                  "range_or_options": "-250...250",
                   "note": null,
                   "is_caption": false,
                   "is_stub": false,
@@ -399,10 +404,15 @@
                   "register": {
                     "family": "A",
                     "index": 3,
-                    "access": "R/W"
+                    "access": "R/W",
+                    "signed": true
+                  },
+                  "editor": {
+                    "type": "integer",
+                    "scale": 1
                   },
                   "quantity": "percent",
-                  "range_or_options": "0...250",
+                  "range_or_options": "-250...250",
                   "note": null,
                   "is_caption": false,
                   "is_stub": false,
@@ -418,9 +428,15 @@
                   "register": {
                     "family": "A",
                     "index": 4,
-                    "access": "R/W"
+                    "access": "R/W",
+                    "signed": true
                   },
-                  "range_or_options": null,
+                  "editor": {
+                    "type": "float",
+                    "scale": 10
+                  },
+                  "quantity": "percent",
+                  "range_or_options": "-250.0...250.0",
                   "note": null,
                   "is_caption": false,
                   "is_stub": false,
@@ -455,15 +471,20 @@
                   "register": {
                     "family": "A",
                     "index": 7,
-                    "access": "R/W"
+                    "access": "R/W",
+                    "signed": true
                   },
                   "visible_if": {
                     "path": "3.2.1.1",
                     "operator": "in",
                     "values": [2, 4]
                   },
+                  "editor": {
+                    "type": "integer",
+                    "scale": 1
+                  },
                   "quantity": "percent",
-                  "range_or_options": "0...250",
+                  "range_or_options": "-250...250",
                   "note": null,
                   "is_caption": false,
                   "is_stub": false,
@@ -479,15 +500,20 @@
                   "register": {
                     "family": "A",
                     "index": 8,
-                    "access": "R/W"
+                    "access": "R/W",
+                    "signed": true
                   },
                   "visible_if": {
                     "path": "3.2.1.1",
                     "operator": "in",
                     "values": [2, 4]
                   },
+                  "editor": {
+                    "type": "integer",
+                    "scale": 1
+                  },
                   "quantity": "percent",
-                  "range_or_options": "0...250",
+                  "range_or_options": "-250...250",
                   "note": null,
                   "is_caption": false,
                   "is_stub": false,
@@ -503,14 +529,20 @@
                   "register": {
                     "family": "A",
                     "index": 9,
-                    "access": "R/W"
+                    "access": "R/W",
+                    "signed": true
                   },
                   "visible_if": {
                     "path": "3.2.1.1",
                     "operator": "in",
                     "values": [2, 4]
                   },
-                  "range_or_options": null,
+                  "editor": {
+                    "type": "float",
+                    "scale": 10
+                  },
+                  "quantity": "percent",
+                  "range_or_options": "-250.0...250.0",
                   "note": null,
                   "is_caption": false,
                   "is_stub": false,

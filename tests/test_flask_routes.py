@@ -74,6 +74,31 @@ class TestApiMenuValueGet:
         assert editor["type"] == "boolean"
         assert len(editor["options"]) == 2
 
+    def test_signed_probe_offset_decodes_two_complement_word(self, app_client):
+        import runtime
+
+        runtime.client.set_holding_register(4, 65535)
+        resp = app_client.get("/api/menu-value?path=3.2.2.4&refresh=1")
+
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["raw"] == 65535
+        assert abs(data["value"] - -0.1) < 0.01
+        assert data["resolved_editor"]["signed"] is True
+        assert data["resolved_editor"]["scale"] == 10.0
+
+    def test_signed_probe_min_decodes_integer_word(self, app_client):
+        import runtime
+
+        runtime.client.set_holding_register(2, 65535)
+        resp = app_client.get("/api/menu-value?path=3.2.2.2&refresh=1")
+
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["raw"] == 65535
+        assert data["value"] == -1
+        assert data["resolved_editor"]["type"] == "integer"
+
 
 # ── POST /api/menu-value ─────────────────────────────────────────────────
 
@@ -112,6 +137,36 @@ class TestApiMenuValuePost:
             content_type="application/json",
         )
         assert resp.status_code == 404
+
+    def test_signed_probe_offset_encodes_two_complement_word(self, app_client):
+        import runtime
+
+        resp = app_client.post(
+            "/api/menu-value",
+            data=json.dumps({"path": "3.2.2.4", "value": -1.0}),
+            content_type="application/json",
+        )
+
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["raw"] == 65526
+        assert abs(data["value"] - -1.0) < 0.01
+        assert runtime.client._holding_registers[4] == 65526
+
+    def test_signed_probe_min_encodes_integer_word(self, app_client):
+        import runtime
+
+        resp = app_client.post(
+            "/api/menu-value",
+            data=json.dumps({"path": "3.2.2.2", "value": -1}),
+            content_type="application/json",
+        )
+
+        assert resp.status_code == 200
+        data = resp.get_json()
+        assert data["raw"] == 65535
+        assert data["value"] == -1
+        assert runtime.client._holding_registers[2] == 65535
 
 
 # ── POST /api/setpoint ───────────────────────────────────────────────────

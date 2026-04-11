@@ -65,6 +65,8 @@ MENU_MAX_PRODUCTION_PATH = "2.3"
 MENU_PROP_BAND_PATH = "2.4"
 NUMERIC_RANGE_RE = re.compile(r"(-?\d+(?:\.\d+)?)\s*(?:\.{2,3})\s*(-?\d+(?:\.\d+)?)")
 FLOAT_LABEL_RE = re.compile(r"\b(offset|band|setpoint|hyster)\b", re.IGNORECASE)
+SIGNED_16_MIN = -32768
+SIGNED_16_MAX = 32767
 
 SETPOINT_FIELD = WritableField(
     request_key="temp_c",
@@ -109,6 +111,31 @@ PROP_BAND_FIELD = WritableField(
 
 def format_limit(value: float) -> str:
     return f"{value:g}"
+
+
+def is_menu_register_signed(node: dict[str, Any]) -> bool:
+    register = node.get("register")
+    return isinstance(register, dict) and register.get("signed") is True
+
+
+def decode_menu_register_word(raw_value: int, *, signed: bool) -> int:
+    if not signed:
+        return int(raw_value)
+    word = int(raw_value) & 0xFFFF
+    if word >= 0x8000:
+        return word - 0x10000
+    return word
+
+
+def encode_menu_register_word(value: int, *, signed: bool) -> int:
+    integer_value = int(value)
+    if signed:
+        if not (SIGNED_16_MIN <= integer_value <= SIGNED_16_MAX):
+            raise ValueError(
+                f"scaled value out of signed 16-bit range ({SIGNED_16_MIN}..{SIGNED_16_MAX})"
+            )
+        return integer_value & 0xFFFF
+    return integer_value
 
 
 def walk_menu_nodes(node: dict[str, Any]):
@@ -252,6 +279,7 @@ def resolve_node_editor(node: dict[str, Any]) -> dict[str, Any]:
             "scale": 1.0,
             "limits": None,
             "step": None,
+            "signed": is_menu_register_signed(node),
             "editable": False,
             "modbus_backed": modbus_backed,
             "writable": writable,
@@ -303,6 +331,7 @@ def resolve_node_editor(node: dict[str, Any]) -> dict[str, Any]:
         "scale": scale,
         "limits": limits,
         "step": step,
+        "signed": is_menu_register_signed(node),
         "editable": editable,
         "modbus_backed": modbus_backed,
         "writable": writable,
@@ -452,8 +481,9 @@ def read_menu_value_from_controller(node: dict[str, Any]) -> dict[str, Any]:
             if not rr.registers:
                 raise RuntimeError(f"Modbus read returned no value for register {index}")
             raw_value = int(rr.registers[0])
+            decoded_value = decode_menu_register_word(raw_value, signed=is_menu_register_signed(node))
             scale = infer_menu_numeric_scale(node, editor_type)
-            value = raw_value / scale if editor_type == "float" else raw_value
+            value = decoded_value / scale if editor_type == "float" else decoded_value
 
     cache_menu_value(path, raw=raw_value, value=value, source="modbus")
     return {"path": path, "raw": raw_value, "value": value}
@@ -508,11 +538,13 @@ def coerce_menu_write(node: dict[str, Any], incoming_value: Any) -> tuple[Any, i
 
     if editor_type == "integer":
         integer_value = int(round(numeric_value))
-        return integer_value, integer_value
+        raw_value = encode_menu_register_word(integer_value, signed=is_menu_register_signed(node))
+        return integer_value, raw_value
 
     scale = infer_menu_numeric_scale(node, editor_type)
-    raw_value = int(round(numeric_value * scale))
-    return raw_value / scale, raw_value
+    scaled_value = int(round(numeric_value * scale))
+    raw_value = encode_menu_register_word(scaled_value, signed=is_menu_register_signed(node))
+    return scaled_value / scale, raw_value
 
 
 def write_menu_value_to_controller(node: dict[str, Any], incoming_value: Any) -> dict[str, Any]:
