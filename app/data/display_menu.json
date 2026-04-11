@@ -976,6 +976,7 @@
                     "index": 138,
                     "access": "R/W"
                   },
+                  "_comment": "Modbus writes to I,138 are acknowledged but the controller reloads the previous value unless committed via the keypad/display path.",
                   "quantity": "conductivity",
                   "range_or_options": "0...2000",
                   "note": null,
