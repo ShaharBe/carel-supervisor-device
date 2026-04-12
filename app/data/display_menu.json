@@ -36,7 +36,7 @@
           "path": "2.2",
           "title": "Humidifier",
           "display_label": "Humidifier",
-          "raw_text": "Humidifier (D,8,R/W) [Auto/Off] Note: Assume (D,81,R/W) == \"1\"",
+          "raw_text": "Humidifier (D,8,R/W) [Auto/Off]",
           "kind": "leaf",
           "children": [],
           "register": {
@@ -46,7 +46,11 @@
           },
           "dashboard_sync": "info.humidifier_network_enabled",
           "range_or_options": "Auto/Off",
-          "note": "Assume (D,81,R/W) == \"1\"",
+          "note": [
+            "Assumes: D,81 == \"1\".",
+            "This coil indirectly toggles I,136 between 0 (on duty) and 2 (disabled via network)",
+            "Datasheet: remote on/off from network: 0 = disabled, 1 = enabled"
+          ],
           "is_caption": false,
           "is_stub": false,
           "page_direction": null
@@ -1259,7 +1263,10 @@
                     ]
                   },
                   "range_or_options": "yes,no",
-                  "note": null,
+                  "note": [
+                    "There is probably no option to remotely enable the 'manual procedure' from the Modbus network",
+                    "Treat this as a read-only field that indicates whether the humidifier is currently in manual procedure mode or not"
+                  ],
                   "is_caption": false,
                   "is_stub": false,
                   "page_direction": null
@@ -1273,7 +1280,10 @@
                   "children": [],
                   "register": null,
                   "range_or_options": "yes,no",
-                  "note": null,
+                  "note": [
+                    "There is probably no option to remotely turn on the 'power contactor' (electrodes) from the Modbus network",
+                    "To indirectly turn 'power contactor' on, simply turn on the humidifier (Set > Humidifier"
+                  ],
                   "is_caption": false,
                   "is_stub": false,
                   "page_direction": null

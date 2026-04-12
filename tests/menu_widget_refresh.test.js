@@ -106,6 +106,44 @@ function createVisibilityReconciliationPayload() {
   };
 }
 
+function createNoteArrayPayload() {
+  return {
+    ok: true,
+    error: null,
+    source_path: 'test',
+    dashboard_sync_map: {},
+    root: {
+      path: '',
+      title: 'Root',
+      display_label: 'Root',
+      raw_text: 'Root',
+      kind: 'root',
+      children: [
+        {
+          path: '1',
+          title: 'Commented Field',
+          display_label: 'Commented Field',
+          raw_text: 'Commented Field',
+          kind: 'leaf',
+          children: [],
+          register: null,
+          range_or_options: null,
+          note: ['First line.', 'Second line.'],
+          is_caption: false,
+          is_stub: false,
+          page_direction: null
+        }
+      ],
+      register: null,
+      range_or_options: null,
+      note: null,
+      is_caption: false,
+      is_stub: false,
+      page_direction: null
+    }
+  };
+}
+
 test('dashboard refresh re-fetches visible remote leaves in the active menu', async () => {
   const harness = createMenuWidgetHarness();
   const { widget, fetchCalls } = harness;
@@ -382,4 +420,21 @@ test('measure-unit rule refresh updates runtime units and decorated range hints'
 
   assert.equal(widget.__testing.getNode('2.1').display_unit, '°F');
   assert.equal(widget.__testing.getNode('2.4').display_range_or_options, '2..19.9 °F');
+});
+
+test('renders array notes as multiline detail text', () => {
+  const harness = createMenuWidgetHarness({
+    payload: createNoteArrayPayload()
+  });
+  const { widget, document } = harness;
+
+  widget.init();
+
+  const detail = document.getElementById('menuDetail');
+  const noteLine = detail.children.find(
+    (child) => child.className === 'menu-detail-note' && child.textContent.startsWith('Note:')
+  );
+
+  assert.ok(noteLine, 'expected menu detail to include a note line');
+  assert.equal(noteLine.textContent, 'Note: First line.\nSecond line.');
 });

@@ -885,6 +885,18 @@ window.CarelMenuWidget = (() => {
     return fragments.join(' | ');
   }
 
+  function formatMenuNote(note) {
+    if (Array.isArray(note)) {
+      return note.map((line) => (line === null || line === undefined ? '' : String(line))).join('\n').trim();
+    }
+
+    if (note === null || note === undefined) {
+      return '';
+    }
+
+    return String(note).trim();
+  }
+
   function renderMenuDetail(node) {
     const detail = document.getElementById('menuDetail');
     detail.replaceChildren();
@@ -942,10 +954,11 @@ window.CarelMenuWidget = (() => {
       }
     }
 
-    if (node.note) {
+    const noteText = formatMenuNote(node.note);
+    if (noteText) {
       const note = document.createElement('div');
       note.className = 'menu-detail-note';
-      note.textContent = 'Note: ' + node.note;
+      note.textContent = 'Note: ' + noteText;
       detail.appendChild(note);
     }
 
