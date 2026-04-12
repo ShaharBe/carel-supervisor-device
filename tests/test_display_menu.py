@@ -193,6 +193,44 @@ class TestLoadDisplayMenu:
         result = load_display_menu()
         assert result["source_path"] is not None
 
+    def test_manual_procedure_alt_menu_uses_undocumented_coils(self):
+        result = load_display_menu()
+        root = result["root"]
+
+        def find_node(node: dict, path: str) -> dict | None:
+            if node.get("path") == path:
+                return node
+            for child in node.get("children", []):
+                found = find_node(child, path)
+                if found is not None:
+                    return found
+            return None
+
+        menu = find_node(root, "3.3.4")
+        assert menu is not None
+        assert menu["title"] == "Manual procedure (alt)"
+
+        leaves = menu["children"]
+        assert [leaf["title"] for leaf in leaves] == [
+            "Manual procedure",
+            "Power contactor",
+            "Fill valve",
+            "Drain pump",
+            "Alarm",
+            "Dehumidifier",
+        ]
+        assert [
+            (leaf["register"]["family"], leaf["register"]["index"], leaf["register"]["access"])
+            for leaf in leaves
+        ] == [
+            ("D", 70, "R/W"),
+            ("D", 71, "R/W"),
+            ("D", 72, "R/W"),
+            ("D", 73, "R/W"),
+            ("D", 74, "R/W"),
+            ("D", 75, "R/W"),
+        ]
+
 
 # ── _load_menu_root_from_json ────────────────────────────────────────────
 

@@ -1404,6 +1404,207 @@
               "page_direction": null
             },
             {
+              "path": "3.3.4",
+              "title": "Manual procedure (alt)",
+              "display_label": "Manual procedure (alt)",
+              "raw_text": "Manual procedure (alt)",
+              "kind": "menu",
+              "children": [
+                {
+                  "path": "3.3.4.1",
+                  "title": "Manual procedure",
+                  "display_label": "Manual procedure",
+                  "raw_text": "Manual procedure (D,70,R/W) [yes,no]",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "D",
+                    "index": 70,
+                    "access": "R/W"
+                  },
+                  "editor": {
+                    "type": "boolean",
+                    "options": [
+                      {
+                        "value": true,
+                        "label": "yes"
+                      },
+                      {
+                        "value": false,
+                        "label": "no"
+                      }
+                    ]
+                  },
+                  "range_or_options": "yes,no",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.3.4.2",
+                  "title": "Power contactor",
+                  "display_label": "Power contactor",
+                  "raw_text": "Power contactor (D,71,R/W) [yes,no]",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "D",
+                    "index": 71,
+                    "access": "R/W"
+                  },
+                  "editor": {
+                    "type": "boolean",
+                    "options": [
+                      {
+                        "value": true,
+                        "label": "yes"
+                      },
+                      {
+                        "value": false,
+                        "label": "no"
+                      }
+                    ]
+                  },
+                  "range_or_options": "yes,no",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.3.4.3",
+                  "title": "Fill valve",
+                  "display_label": "Fill valve",
+                  "raw_text": "Fill valve (D,72,R/W) [off,on]",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "D",
+                    "index": 72,
+                    "access": "R/W"
+                  },
+                  "editor": {
+                    "type": "boolean",
+                    "options": [
+                      {
+                        "value": false,
+                        "label": "off"
+                      },
+                      {
+                        "value": true,
+                        "label": "on"
+                      }
+                    ]
+                  },
+                  "range_or_options": "off,on",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.3.4.4",
+                  "title": "Drain pump",
+                  "display_label": "Drain pump",
+                  "raw_text": "Drain pump (D,73,R/W) [off,on]",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "D",
+                    "index": 73,
+                    "access": "R/W"
+                  },
+                  "editor": {
+                    "type": "boolean",
+                    "options": [
+                      {
+                        "value": false,
+                        "label": "off"
+                      },
+                      {
+                        "value": true,
+                        "label": "on"
+                      }
+                    ]
+                  },
+                  "range_or_options": "off,on",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.3.4.5",
+                  "title": "Alarm",
+                  "display_label": "Alarm",
+                  "raw_text": "Alarm (D,74,R/W) [yes,no]",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "D",
+                    "index": 74,
+                    "access": "R/W"
+                  },
+                  "editor": {
+                    "type": "boolean",
+                    "options": [
+                      {
+                        "value": true,
+                        "label": "yes"
+                      },
+                      {
+                        "value": false,
+                        "label": "no"
+                      }
+                    ]
+                  },
+                  "range_or_options": "yes,no",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                },
+                {
+                  "path": "3.3.4.6",
+                  "title": "Dehumidifier",
+                  "display_label": "Dehumidifier",
+                  "raw_text": "Dehumidifier (D,75,R/W) [off,on]",
+                  "kind": "leaf",
+                  "children": [],
+                  "register": {
+                    "family": "D",
+                    "index": 75,
+                    "access": "R/W"
+                  },
+                  "editor": {
+                    "type": "boolean",
+                    "options": [
+                      {
+                        "value": false,
+                        "label": "off"
+                      },
+                      {
+                        "value": true,
+                        "label": "on"
+                      }
+                    ]
+                  },
+                  "range_or_options": "off,on",
+                  "note": null,
+                  "is_caption": false,
+                  "is_stub": false,
+                  "page_direction": null
+                }
+              ],
+              "register": null,
+              "range_or_options": null,
+              "note": null,
+              "is_caption": false,
+              "is_stub": false,
+              "page_direction": null
+            },
+            {
               "path": "3.3.3",
               "title": "Change cylinder",
               "display_label": "Change cylinder",
