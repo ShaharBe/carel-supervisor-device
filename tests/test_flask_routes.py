@@ -31,6 +31,77 @@ class TestApiTemp:
         assert "com_port" in data["config"]
         assert "baudrate" in data["config"]
 
+    def test_prefers_canonical_resource_over_stale_dashboard_field(self, app_client):
+        import runtime
+
+        with runtime.cache_lock:
+            runtime.cache.temp_raw = 249
+            runtime.cache.temp_c = 24.9
+            runtime.cache.last_error = None
+            runtime.cache.info_cyl1_status = 2
+            runtime.cache.resource_values.pop(runtime.INFO_CYL1_STATUS_RESOURCE_KEY, None)
+        runtime.cache_resource_value(
+            runtime.INFO_CYL1_STATUS_RESOURCE_KEY,
+            raw=3,
+            value=3,
+            source="modbus",
+        )
+
+        resp = app_client.get("/api/temp")
+        data = resp.get_json()
+
+        assert resp.status_code == 200
+        assert data["info"]["cyl1_status"] == 3
+
+    def test_exposes_resource_freshness_metadata(self, app_client):
+        import runtime
+
+        runtime.cache_resource_value(
+            runtime.INFO_CYL1_STATUS_RESOURCE_KEY,
+            raw=3,
+            value=3,
+            source="modbus",
+        )
+
+        resp = app_client.get("/api/temp")
+        data = resp.get_json()
+        metadata = data["resources"][runtime.INFO_CYL1_STATUS_RESOURCE_KEY]
+
+        assert resp.status_code == 200
+        assert metadata["updated_utc"]
+        assert metadata["source"] == "modbus"
+        assert metadata["error"] is None
+
+    def test_info_block_error_falls_back_to_legacy_dashboard_value(self, app_client):
+        import runtime
+
+        with runtime.cache_lock:
+            runtime.cache.temp_raw = 249
+            runtime.cache.temp_c = 24.9
+            runtime.cache.last_error = None
+            runtime.cache.info_cyl1_status = 2
+            runtime.cache.resource_values.pop(runtime.INFO_CYL1_STATUS_RESOURCE_KEY, None)
+        runtime.cache_resource_value(
+            runtime.INFO_CYL1_STATUS_RESOURCE_KEY,
+            raw=3,
+            value=3,
+            source="poll",
+        )
+        with runtime.cache_lock:
+            runtime.cache.info_cyl1_status = 2
+
+        runtime._apply_info_block_error("info poll timeout")
+
+        resp = app_client.get("/api/temp")
+        data = resp.get_json()
+        metadata = data["resources"][runtime.INFO_CYL1_STATUS_RESOURCE_KEY]
+
+        assert resp.status_code == 200
+        assert data["info"]["cyl1_status"] == 2
+        assert data["info"]["error"] == "info poll timeout"
+        assert metadata["source"] == "poll"
+        assert metadata["error"] == "info poll timeout"
+
 
 # ── GET /api/menu-value ──────────────────────────────────────────────────
 
@@ -98,6 +169,46 @@ class TestApiMenuValueGet:
         assert data["raw"] == 65535
         assert data["value"] == -1
         assert data["resolved_editor"]["type"] == "integer"
+
+    def test_read_info_cylinder_status_updates_canonical_resource(self, app_client):
+        import runtime
+
+        with runtime.cache_lock:
+            runtime.cache.resource_values.pop(runtime.INFO_CYL1_STATUS_RESOURCE_KEY, None)
+            runtime.cache.menu_values.pop("6.2", None)
+        runtime.client.set_holding_register(140, 3)
+
+        resp = app_client.get("/api/menu-value?path=6.2&refresh=1")
+        data = resp.get_json()
+        cached = runtime.get_cached_resource_value(runtime.INFO_CYL1_STATUS_RESOURCE_KEY)
+
+        assert resp.status_code == 200
+        assert data["resource_key"] == runtime.INFO_CYL1_STATUS_RESOURCE_KEY
+        assert data["value"] == 3
+        assert cached is not None
+        assert cached["value"] == 3
+        assert cached["source"] == "modbus"
+
+    def test_i136_aliases_share_canonical_resource_cache(self, app_client):
+        import runtime
+
+        with runtime.cache_lock:
+            runtime.cache.resource_values.pop(runtime.INFO_HUMIDIFIER_STATUS_RESOURCE_KEY, None)
+            runtime.cache.menu_values.pop("4.1", None)
+            runtime.cache.menu_values.pop("3.3.1.1", None)
+        runtime.client.set_holding_register(136, 6)
+
+        read_resp = app_client.get("/api/menu-value?path=4.1&refresh=1")
+        alias_resp = app_client.get("/api/menu-value?path=3.3.1.1")
+        read_data = read_resp.get_json()
+        alias_data = alias_resp.get_json()
+
+        assert read_resp.status_code == 200
+        assert alias_resp.status_code == 200
+        assert read_data["resource_key"] == runtime.INFO_HUMIDIFIER_STATUS_RESOURCE_KEY
+        assert alias_data["resource_key"] == runtime.INFO_HUMIDIFIER_STATUS_RESOURCE_KEY
+        assert alias_data["cached"] is True
+        assert alias_data["value"] == 6
 
 
 # ── POST /api/menu-value ─────────────────────────────────────────────────
@@ -168,6 +279,25 @@ class TestApiMenuValuePost:
         assert data["value"] == -1
         assert runtime.client._holding_registers[2] == 65535
 
+    def test_manual_procedure_write_updates_i136_dashboard_resource(self, app_client):
+        import runtime
+
+        with runtime.cache_lock:
+            runtime.cache.resource_values.pop(runtime.INFO_HUMIDIFIER_STATUS_RESOURCE_KEY, None)
+            runtime.cache.info_humidifier_status = 2
+
+        resp = app_client.post(
+            "/api/menu-value",
+            data=json.dumps({"path": "3.3.1.1", "value": 6}),
+            content_type="application/json",
+        )
+        temp_resp = app_client.get("/api/temp")
+
+        assert resp.status_code == 200
+        assert resp.get_json()["resource_key"] == runtime.INFO_HUMIDIFIER_STATUS_RESOURCE_KEY
+        assert runtime.client._holding_registers[136] == 6
+        assert temp_resp.get_json()["info"]["humidifier_status"] == 6
+
 
 # ── POST /api/setpoint ───────────────────────────────────────────────────
 
@@ -182,6 +312,26 @@ class TestApiSetpoint:
         data = resp.get_json()
         assert data["ok"] is True
         assert abs(data["temp_c"] - 28.0) < 0.1
+
+    def test_valid_setpoint_updates_canonical_resource_cache(self, app_client):
+        import runtime
+
+        with runtime.cache_lock:
+            runtime.cache.resource_values.pop(runtime.SETPOINT_RESOURCE_KEY, None)
+
+        resp = app_client.post(
+            "/api/setpoint",
+            data=json.dumps({"temp_c": 28.0}),
+            content_type="application/json",
+        )
+        cached = runtime.get_cached_resource_value(runtime.SETPOINT_RESOURCE_KEY)
+
+        assert resp.status_code == 200
+        assert cached is not None
+        assert cached["raw"] == 280
+        assert abs(cached["value"] - 28.0) < 0.1
+        assert cached["source"] == "write"
+        assert cached["error"] is None
 
     def test_out_of_range_returns_400(self, app_client):
         resp = app_client.post(

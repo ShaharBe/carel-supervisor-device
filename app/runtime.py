@@ -39,6 +39,7 @@ from modbus_map import (
     TEMP_ADDR,
     TEMP_SCALE,
 )
+from resource_cache import resource_key
 
 
 COM_PORT = "/dev/ttyACM0"
@@ -155,6 +156,7 @@ class Cache:
     alarms_last_scan_utc: Optional[str] = None
     alarms_error: Optional[str] = None
     menu_values: dict[str, dict[str, Any]] = field(default_factory=dict)
+    resource_values: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 cache = Cache()
@@ -170,6 +172,101 @@ interactive_modbus_deadline_monotonic = 0.0
 
 active_com_port = COM_PORT
 client = build_modbus_client(active_com_port)
+
+
+TEMP_RESOURCE_KEY = resource_key("A", TEMP_ADDR)
+SETPOINT_RESOURCE_KEY = resource_key("A", SETPOINT_ADDR)
+MAX_PRODUCTION_RESOURCE_KEY = resource_key("A", MAX_PRODUCTION_ADDR)
+PROP_BAND_RESOURCE_KEY = resource_key("A", PROP_BAND_ADDR)
+HUMIDIFIER_NETWORK_RESOURCE_KEY = resource_key("D", HUMIDIFIER_REMOTE_ONOFF_COIL)
+DRAIN_CYL1_RESOURCE_KEY = resource_key("D", DRAIN_CYL1_COIL)
+INFO_HUMIDIFIER_STATUS_RESOURCE_KEY = resource_key("I", HUMIDIFIER_STATUS_ADDR)
+INFO_CONDUCTIVITY_RESOURCE_KEY = resource_key("I", 137)
+INFO_CYL1_PHASE_RESOURCE_KEY = resource_key("I", 139)
+INFO_CYL1_STATUS_RESOURCE_KEY = resource_key("I", 140)
+INFO_CYL2_PHASE_RESOURCE_KEY = resource_key("I", 141)
+INFO_CYL2_STATUS_RESOURCE_KEY = resource_key("I", 142)
+INFO_CYL1_HOURS_RESOURCE_KEY = resource_key("I", INFO_BLOCK2_START_ADDR)
+INFO_CYL2_HOURS_RESOURCE_KEY = resource_key("I", INFO_BLOCK2_START_ADDR + 1)
+INFO_VOLTAGE_TYPE_RESOURCE_KEY = resource_key("I", INFO_BLOCK2_START_ADDR + 2)
+
+
+def _sync_legacy_cache_from_resource_locked(key: str, *, raw: Any, value: Any) -> None:
+    """Mirror canonical resource updates into the older dashboard fields."""
+    if key == TEMP_RESOURCE_KEY:
+        cache.temp_raw = int(raw)
+        cache.temp_c = float(value)
+    elif key == SETPOINT_RESOURCE_KEY:
+        cache.last_setpoint_raw = int(raw)
+        cache.last_setpoint_c = float(value)
+    elif key == MAX_PRODUCTION_RESOURCE_KEY:
+        cache.max_production_raw = int(raw)
+        cache.max_production_pct = float(value)
+    elif key == PROP_BAND_RESOURCE_KEY:
+        cache.prop_band_raw = int(raw)
+        cache.prop_band_c = float(value)
+    elif key == HUMIDIFIER_NETWORK_RESOURCE_KEY:
+        cache.humidifier_network_enabled = bool(value)
+    elif key == DRAIN_CYL1_RESOURCE_KEY:
+        cache.cyl1_drain_on = bool(value)
+    elif key == INFO_HUMIDIFIER_STATUS_RESOURCE_KEY:
+        cache.info_humidifier_status = int(value)
+    elif key == INFO_CONDUCTIVITY_RESOURCE_KEY:
+        cache.info_conductivity = int(value)
+    elif key == INFO_CYL1_PHASE_RESOURCE_KEY:
+        cache.info_cyl1_phase = int(value)
+    elif key == INFO_CYL1_STATUS_RESOURCE_KEY:
+        cache.info_cyl1_status = int(value)
+    elif key == INFO_CYL2_PHASE_RESOURCE_KEY:
+        cache.info_cyl2_phase = int(value)
+    elif key == INFO_CYL2_STATUS_RESOURCE_KEY:
+        cache.info_cyl2_status = int(value)
+    elif key == INFO_CYL1_HOURS_RESOURCE_KEY:
+        cache.info_cyl1_hours = int(value)
+    elif key == INFO_CYL2_HOURS_RESOURCE_KEY:
+        cache.info_cyl2_hours = int(value)
+    elif key == INFO_VOLTAGE_TYPE_RESOURCE_KEY:
+        cache.info_voltage_type = int(value)
+
+
+def _cache_resource_value_locked(key: str, *, raw: Any, value: Any, source: str) -> None:
+    cache.resource_values[key] = {
+        "raw": raw,
+        "value": value,
+        "source": source,
+        "updated_utc": now_iso(),
+        "error": None,
+    }
+    _sync_legacy_cache_from_resource_locked(key, raw=raw, value=value)
+
+
+def cache_resource_value(key: str, *, raw: Any, value: Any, source: str) -> None:
+    with cache_lock:
+        _cache_resource_value_locked(key, raw=raw, value=value, source=source)
+
+
+def _cache_resource_error_locked(key: str, error_message: str) -> None:
+    previous = cache.resource_values.get(key, {})
+    cache.resource_values[key] = {
+        "raw": previous.get("raw"),
+        "value": previous.get("value"),
+        "source": previous.get("source"),
+        "updated_utc": now_iso(),
+        "error": error_message,
+    }
+
+
+def cache_resource_error(key: str, error_message: str) -> None:
+    with cache_lock:
+        _cache_resource_error_locked(key, error_message)
+
+
+def get_cached_resource_value(key: str) -> dict[str, Any] | None:
+    with cache_lock:
+        cached_value = cache.resource_values.get(key)
+        if cached_value is None:
+            return None
+        return dict(cached_value)
 
 
 def get_active_com_port() -> str:
@@ -688,6 +785,12 @@ def _apply_temp_block(data: dict[str, Any]) -> None:
         cache.temp_c = data["temp_c"]
         cache.last_update_utc = now_iso()
         cache.last_error = None
+        _cache_resource_value_locked(
+            TEMP_RESOURCE_KEY,
+            raw=data["temp_raw"],
+            value=data["temp_c"],
+            source="poll",
+        )
 
 
 def _apply_temp_block_error(error_message: str) -> None:
@@ -722,21 +825,87 @@ def _apply_info_block(data: dict[str, Any]) -> None:
         cache.info_cyl2_hours = data["info_cyl2_hours"]
         cache.info_voltage_type = data["info_voltage_type"]
         cache.info_error = None
+        _cache_resource_value_locked(
+            INFO_CONDUCTIVITY_RESOURCE_KEY,
+            raw=data["info_conductivity"],
+            value=data["info_conductivity"],
+            source="poll",
+        )
+        _cache_resource_value_locked(
+            INFO_CYL1_PHASE_RESOURCE_KEY,
+            raw=data["info_cyl1_phase"],
+            value=data["info_cyl1_phase"],
+            source="poll",
+        )
+        _cache_resource_value_locked(
+            INFO_CYL1_STATUS_RESOURCE_KEY,
+            raw=data["info_cyl1_status"],
+            value=data["info_cyl1_status"],
+            source="poll",
+        )
+        _cache_resource_value_locked(
+            INFO_CYL2_PHASE_RESOURCE_KEY,
+            raw=data["info_cyl2_phase"],
+            value=data["info_cyl2_phase"],
+            source="poll",
+        )
+        _cache_resource_value_locked(
+            INFO_CYL2_STATUS_RESOURCE_KEY,
+            raw=data["info_cyl2_status"],
+            value=data["info_cyl2_status"],
+            source="poll",
+        )
+        _cache_resource_value_locked(
+            INFO_CYL1_HOURS_RESOURCE_KEY,
+            raw=data["info_cyl1_hours"],
+            value=data["info_cyl1_hours"],
+            source="poll",
+        )
+        _cache_resource_value_locked(
+            INFO_CYL2_HOURS_RESOURCE_KEY,
+            raw=data["info_cyl2_hours"],
+            value=data["info_cyl2_hours"],
+            source="poll",
+        )
+        _cache_resource_value_locked(
+            INFO_VOLTAGE_TYPE_RESOURCE_KEY,
+            raw=data["info_voltage_type"],
+            value=data["info_voltage_type"],
+            source="poll",
+        )
 
 
 def _apply_info_block_error(error_message: str) -> None:
     with cache_lock:
         cache.info_error = error_message
+        for key in (
+            INFO_CONDUCTIVITY_RESOURCE_KEY,
+            INFO_CYL1_PHASE_RESOURCE_KEY,
+            INFO_CYL1_STATUS_RESOURCE_KEY,
+            INFO_CYL2_PHASE_RESOURCE_KEY,
+            INFO_CYL2_STATUS_RESOURCE_KEY,
+            INFO_CYL1_HOURS_RESOURCE_KEY,
+            INFO_CYL2_HOURS_RESOURCE_KEY,
+            INFO_VOLTAGE_TYPE_RESOURCE_KEY,
+        ):
+            _cache_resource_error_locked(key, error_message)
 
 
 def _apply_humidifier_status_block(data: dict[str, Any]) -> None:
     with cache_lock:
         cache.info_humidifier_status = data["info_humidifier_status"]
+        _cache_resource_value_locked(
+            INFO_HUMIDIFIER_STATUS_RESOURCE_KEY,
+            raw=data["info_humidifier_status"],
+            value=data["info_humidifier_status"],
+            source="poll",
+        )
 
 
-def _apply_humidifier_status_block_error(_error_message: str) -> None:
+def _apply_humidifier_status_block_error(error_message: str) -> None:
     with cache_lock:
         cache.info_humidifier_status = None
+        _cache_resource_error_locked(INFO_HUMIDIFIER_STATUS_RESOURCE_KEY, error_message)
 
 
 def _apply_alarms_block(data: dict[str, Any]) -> None:
@@ -761,12 +930,28 @@ def _apply_coils_block(data: dict[str, Any]) -> None:
     with cache_lock:
         cache.humidifier_network_enabled = data["humidifier_network_enabled"]
         cache.cyl1_drain_on = data["cyl1_drain_on"]
+        if data["humidifier_network_enabled"] is not None:
+            _cache_resource_value_locked(
+                HUMIDIFIER_NETWORK_RESOURCE_KEY,
+                raw=data["humidifier_network_enabled"],
+                value=data["humidifier_network_enabled"],
+                source="poll",
+            )
+        if data["cyl1_drain_on"] is not None:
+            _cache_resource_value_locked(
+                DRAIN_CYL1_RESOURCE_KEY,
+                raw=data["cyl1_drain_on"],
+                value=data["cyl1_drain_on"],
+                source="poll",
+            )
 
 
-def _apply_coils_block_error(_error_message: str) -> None:
+def _apply_coils_block_error(error_message: str) -> None:
     with cache_lock:
         cache.humidifier_network_enabled = None
         cache.cyl1_drain_on = None
+        _cache_resource_error_locked(HUMIDIFIER_NETWORK_RESOURCE_KEY, error_message)
+        _cache_resource_error_locked(DRAIN_CYL1_RESOURCE_KEY, error_message)
 
 
 def _run_poll_block(

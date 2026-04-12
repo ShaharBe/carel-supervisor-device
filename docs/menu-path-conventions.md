@@ -1,6 +1,9 @@
 # Menu Path Conventions
 
 Menu `path` values are stable identifiers, not presentation numbering.
+They describe where an item lives in the UI tree, not which Modbus value it
+represents. Modbus values are identified separately by canonical resource keys
+such as `I:140`, `A:19`, or `D:54`; see `docs/resource-cache-architecture.md`.
 
 Key rules:
 
@@ -33,22 +36,24 @@ To add a new dashboard-synced menu node:
 1. Add `"dashboard_sync": "<payload_key>"` to the node in
    `display_menu.json`.
 2. Ensure the `/api/temp` response already includes the value at that key.
-3. No Python or JS code changes required.
+3. For Modbus-backed values, ensure `/api/temp` prefers the canonical resource
+   cache for that register/coil.
+4. No frontend code changes are required.
 
 Current mappings:
 
-| Menu path | `dashboard_sync` key | Description |
-|---|---|---|
-| `2.1` | `last_setpoint_c` | Setpoint |
-| `2.2` | `info.humidifier_network_enabled` | Humidifier on/off |
-| `2.3` | `max_production_pct` | Max production |
-| `2.4` | `prop_band_c` | Proportional band |
-| `4.1` | `info.humidifier_status` | Humidifier status |
-| `4.6` | `info.conductivity` | Conductivity |
-| `5.2` | `info.cyl1_hours` | Cylinder 1 hours |
-| `5.4` | `device_time_display` | Device date/time |
-| `6.2` | `info.cyl1_status` | Cylinder 1 status |
-| `6.3` | `info.cyl1_phase` | Cylinder 1 activity |
+| Menu path | `dashboard_sync` key | Resource key | Description |
+|---|---|---|---|
+| `2.1` | `last_setpoint_c` | `A:19` | Setpoint |
+| `2.2` | `info.humidifier_network_enabled` | `D:8` | Humidifier on/off |
+| `2.3` | `max_production_pct` | `A:14` | Max production |
+| `2.4` | `prop_band_c` | `A:20` | Proportional band |
+| `4.1` | `info.humidifier_status` | `I:136` | Humidifier status |
+| `4.6` | `info.conductivity` | `I:137` | Conductivity |
+| `5.2` | `info.cyl1_hours` | `I:165` | Cylinder 1 hours |
+| `5.4` | `device_time_display` | n/a | Device date/time, not a Modbus leaf |
+| `6.2` | `info.cyl1_status` | `I:140` | Cylinder 1 status |
+| `6.3` | `info.cyl1_phase` | `I:139` | Cylinder 1 activity |
 
 ## Safe changes
 

@@ -30,6 +30,19 @@ class TestReadTempBlock:
         assert isinstance(result.error, RuntimeError)
         assert "boom" in str(result.error)
 
+    def test_apply_temp_block_updates_resource_cache(self):
+        with runtime.cache_lock:
+            runtime.cache.resource_values.pop(runtime.TEMP_RESOURCE_KEY, None)
+
+        runtime._apply_temp_block({"temp_raw": 236, "temp_c": 23.6})
+        cached = runtime.get_cached_resource_value(runtime.TEMP_RESOURCE_KEY)
+
+        assert cached is not None
+        assert cached["raw"] == 236
+        assert cached["value"] == 23.6
+        assert cached["source"] == "poll"
+        assert cached["error"] is None
+
 
 class TestReadRtcBlock:
     def test_success(self):
@@ -86,6 +99,29 @@ class TestReadInfoBlock:
         finally:
             client._holding_registers.clear()
             client._holding_registers.update(original_registers)
+
+    def test_apply_info_block_updates_resource_cache_and_clears_error(self):
+        runtime.cache_resource_error(runtime.INFO_CYL1_STATUS_RESOURCE_KEY, "old error")
+
+        runtime._apply_info_block(
+            {
+                "info_conductivity": 321,
+                "info_cyl1_phase": 0,
+                "info_cyl1_status": 11,
+                "info_cyl2_phase": 6,
+                "info_cyl2_status": 12,
+                "info_cyl1_hours": 123,
+                "info_cyl2_hours": 456,
+                "info_voltage_type": 4,
+            }
+        )
+
+        cached = runtime.get_cached_resource_value(runtime.INFO_CYL1_STATUS_RESOURCE_KEY)
+
+        assert cached is not None
+        assert cached["value"] == 11
+        assert cached["error"] is None
+        assert cached["source"] == "poll"
 
 
 class TestReadHumidifierStatusBlock:

@@ -73,13 +73,29 @@ from modbus_map import (
 )
 from runtime import (
     BAUDRATE,
+    DRAIN_CYL1_RESOURCE_KEY,
+    HUMIDIFIER_NETWORK_RESOURCE_KEY,
+    INFO_CONDUCTIVITY_RESOURCE_KEY,
+    INFO_CYL1_HOURS_RESOURCE_KEY,
+    INFO_CYL1_PHASE_RESOURCE_KEY,
+    INFO_CYL1_STATUS_RESOURCE_KEY,
+    INFO_CYL2_HOURS_RESOURCE_KEY,
+    INFO_CYL2_PHASE_RESOURCE_KEY,
+    INFO_CYL2_STATUS_RESOURCE_KEY,
+    INFO_HUMIDIFIER_STATUS_RESOURCE_KEY,
+    INFO_VOLTAGE_TYPE_RESOURCE_KEY,
+    MAX_PRODUCTION_RESOURCE_KEY,
+    PROP_BAND_RESOURCE_KEY,
     SLAVE_ID,
+    SETPOINT_RESOURCE_KEY,
+    TEMP_RESOURCE_KEY,
     USB_MODEL_ID,
     USB_SERIAL_SHORT,
     USB_VENDOR_ID,
     adapter_identity_text,
     cache,
     cache_lock,
+    cache_resource_value,
     format_device_datetime_local,
     get_active_com_port,
     logger,
@@ -137,21 +153,76 @@ def view_logs() -> Response:
   limit = request.args.get("tail", default=200, type=int) or 200
   return Response(read_log_tail(limit), mimetype="text/plain")
 
+
+def _resource_field(
+    resource_values: dict[str, dict[str, Any]],
+    key: str,
+    field: str,
+    fallback: Any,
+) -> Any:
+    entry = resource_values.get(key)
+    if entry and entry.get("error") is None and entry.get(field) is not None:
+        return entry[field]
+    return fallback
+
+
+def _resource_metadata(resource_values: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return {
+        key: {
+            "updated_utc": entry.get("updated_utc"),
+            "source": entry.get("source"),
+            "error": entry.get("error"),
+        }
+        for key, entry in resource_values.items()
+    }
+
+
 @app.route("/api/temp", methods=["GET"])
 def api_temp():
     with cache_lock:
+        resource_values = {key: dict(value) for key, value in cache.resource_values.items()}
         data = {
-            "temp_raw": cache.temp_raw,
-            "temp_c": cache.temp_c,
+            "temp_raw": _resource_field(resource_values, TEMP_RESOURCE_KEY, "raw", cache.temp_raw),
+            "temp_c": _resource_field(resource_values, TEMP_RESOURCE_KEY, "value", cache.temp_c),
             "last_update_utc": cache.last_update_utc,
             "last_error": cache.last_error,
             "last_write_utc": cache.last_write_utc,
-            "last_setpoint_raw": cache.last_setpoint_raw,
-            "last_setpoint_c": cache.last_setpoint_c,
-            "max_production_raw": cache.max_production_raw,
-            "max_production_pct": cache.max_production_pct,
-            "prop_band_raw": cache.prop_band_raw,
-            "prop_band_c": cache.prop_band_c,
+            "last_setpoint_raw": _resource_field(
+                resource_values,
+                SETPOINT_RESOURCE_KEY,
+                "raw",
+                cache.last_setpoint_raw,
+            ),
+            "last_setpoint_c": _resource_field(
+                resource_values,
+                SETPOINT_RESOURCE_KEY,
+                "value",
+                cache.last_setpoint_c,
+            ),
+            "max_production_raw": _resource_field(
+                resource_values,
+                MAX_PRODUCTION_RESOURCE_KEY,
+                "raw",
+                cache.max_production_raw,
+            ),
+            "max_production_pct": _resource_field(
+                resource_values,
+                MAX_PRODUCTION_RESOURCE_KEY,
+                "value",
+                cache.max_production_pct,
+            ),
+            "prop_band_raw": _resource_field(
+                resource_values,
+                PROP_BAND_RESOURCE_KEY,
+                "raw",
+                cache.prop_band_raw,
+            ),
+            "prop_band_c": _resource_field(
+                resource_values,
+                PROP_BAND_RESOURCE_KEY,
+                "value",
+                cache.prop_band_c,
+            ),
             "device_time_iso_local": cache.device_time_iso_local,
             "device_time_display": cache.device_time_display,
             "device_time_weekday": cache.device_time_weekday,
@@ -167,19 +238,75 @@ def api_temp():
                 "error": cache.alarms_error,
             },
             "info": {
-                "humidifier_status": cache.info_humidifier_status,
-                "humidifier_network_enabled": cache.humidifier_network_enabled,
-                "conductivity": cache.info_conductivity,
-                "cyl1_phase": cache.info_cyl1_phase,
-                "cyl1_status": cache.info_cyl1_status,
-                "cyl2_phase": cache.info_cyl2_phase,
-                "cyl2_status": cache.info_cyl2_status,
-                "cyl1_hours": cache.info_cyl1_hours,
-                "cyl2_hours": cache.info_cyl2_hours,
-                "voltage_type": cache.info_voltage_type,
+                "humidifier_status": _resource_field(
+                    resource_values,
+                    INFO_HUMIDIFIER_STATUS_RESOURCE_KEY,
+                    "value",
+                    cache.info_humidifier_status,
+                ),
+                "humidifier_network_enabled": _resource_field(
+                    resource_values,
+                    HUMIDIFIER_NETWORK_RESOURCE_KEY,
+                    "value",
+                    cache.humidifier_network_enabled,
+                ),
+                "conductivity": _resource_field(
+                    resource_values,
+                    INFO_CONDUCTIVITY_RESOURCE_KEY,
+                    "value",
+                    cache.info_conductivity,
+                ),
+                "cyl1_phase": _resource_field(
+                    resource_values,
+                    INFO_CYL1_PHASE_RESOURCE_KEY,
+                    "value",
+                    cache.info_cyl1_phase,
+                ),
+                "cyl1_status": _resource_field(
+                    resource_values,
+                    INFO_CYL1_STATUS_RESOURCE_KEY,
+                    "value",
+                    cache.info_cyl1_status,
+                ),
+                "cyl2_phase": _resource_field(
+                    resource_values,
+                    INFO_CYL2_PHASE_RESOURCE_KEY,
+                    "value",
+                    cache.info_cyl2_phase,
+                ),
+                "cyl2_status": _resource_field(
+                    resource_values,
+                    INFO_CYL2_STATUS_RESOURCE_KEY,
+                    "value",
+                    cache.info_cyl2_status,
+                ),
+                "cyl1_hours": _resource_field(
+                    resource_values,
+                    INFO_CYL1_HOURS_RESOURCE_KEY,
+                    "value",
+                    cache.info_cyl1_hours,
+                ),
+                "cyl2_hours": _resource_field(
+                    resource_values,
+                    INFO_CYL2_HOURS_RESOURCE_KEY,
+                    "value",
+                    cache.info_cyl2_hours,
+                ),
+                "voltage_type": _resource_field(
+                    resource_values,
+                    INFO_VOLTAGE_TYPE_RESOURCE_KEY,
+                    "value",
+                    cache.info_voltage_type,
+                ),
                 "error": cache.info_error,
-                "cyl1_drain_on": cache.cyl1_drain_on,
+                "cyl1_drain_on": _resource_field(
+                    resource_values,
+                    DRAIN_CYL1_RESOURCE_KEY,
+                    "value",
+                    cache.cyl1_drain_on,
+                ),
             },
+            "resources": _resource_metadata(resource_values),
         }
 
     ok = data["temp_c"] is not None and data["last_error"] is None
@@ -326,6 +453,12 @@ def api_cyl1_drain():
 
         with cache_lock:
             cache.cyl1_drain_on = target_state
+        cache_resource_value(
+            DRAIN_CYL1_RESOURCE_KEY,
+            raw=target_state,
+            value=target_state,
+            source="write",
+        )
 
         logger.info(
             "Cylinder 1 drain %s on %s",

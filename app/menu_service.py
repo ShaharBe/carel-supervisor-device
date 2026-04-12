@@ -24,11 +24,16 @@ from modbus_map import (
     SETPOINT_SCALE,
     d_to_modbus_coil_addr,
 )
+from resource_cache import resource_key, resource_key_for_menu_node
 from runtime import (
+    INFO_HUMIDIFIER_STATUS_RESOURCE_KEY,
     cache,
     cache_lock,
+    cache_resource_error,
+    cache_resource_value,
     clear_runtime_error,
     get_active_com_port,
+    get_cached_resource_value,
     logger,
     modbus_connect_or_raise,
     modbus_lock,
@@ -389,6 +394,13 @@ def cache_menu_value(path: str, *, raw: Any, value: Any, source: str) -> None:
         _sync_dashboard_menu_cache_locked(path, raw=raw, value=value)
 
 
+def cache_menu_value_for_node(node: dict[str, Any], *, raw: Any, value: Any, source: str) -> None:
+    resource_key_value = resource_key_for_menu_node(node)
+    if resource_key_value:
+        cache_resource_value(resource_key_value, raw=raw, value=value, source=source)
+    cache_menu_value(str(node["path"]), raw=raw, value=value, source=source)
+
+
 def cache_menu_error(path: str, error_message: str) -> None:
     with cache_lock:
         previous = cache.menu_values.get(path, {})
@@ -401,12 +413,28 @@ def cache_menu_error(path: str, error_message: str) -> None:
         }
 
 
+def cache_menu_error_for_node(node: dict[str, Any], error_message: str) -> None:
+    resource_key_value = resource_key_for_menu_node(node)
+    if resource_key_value:
+        cache_resource_error(resource_key_value, error_message)
+    cache_menu_error(str(node["path"]), error_message)
+
+
 def get_cached_menu_value(path: str) -> dict[str, Any] | None:
     with cache_lock:
         cached_value = cache.menu_values.get(path)
         if cached_value is None:
             return None
         return dict(cached_value)
+
+
+def get_cached_menu_value_for_node(node: dict[str, Any]) -> dict[str, Any] | None:
+    resource_key_value = resource_key_for_menu_node(node)
+    if resource_key_value:
+        cached_value = get_cached_resource_value(resource_key_value)
+        if cached_value is not None:
+            return cached_value
+    return get_cached_menu_value(str(node["path"]))
 
 
 def serialize_menu_value(
@@ -421,6 +449,7 @@ def serialize_menu_value(
         "label": node.get("display_label") or node.get("title") or node.get("path"),
         "writable": is_menu_node_writable(node),
         "modbus_backed": is_menu_node_modbus_backed(node),
+        "resource_key": resource_key_for_menu_node(node),
         "resolved_editor": node.get("resolved_editor") or resolve_node_editor(node),
         "value": cached_value.get("value"),
         "raw": cached_value.get("raw"),
@@ -431,7 +460,13 @@ def serialize_menu_value(
     }
 
 
-def sync_menu_write_success(path: str, *, raw: Any, value: Any) -> None:
+def sync_menu_write_success(
+    path: str,
+    *,
+    raw: Any,
+    value: Any,
+    canonical_key: str | None = None,
+) -> None:
     with cache_lock:
         _cache_menu_value_locked(path, raw=raw, value=value, source="write")
         _sync_dashboard_menu_cache_locked(path, raw=raw, value=value)
@@ -439,6 +474,10 @@ def sync_menu_write_success(path: str, *, raw: Any, value: Any) -> None:
         cache.last_error = None
         if path == MENU_HUMIDIFIER_PATH and not bool(value):
             cache.info_humidifier_status = 2
+    if canonical_key:
+        cache_resource_value(canonical_key, raw=raw, value=value, source="write")
+    if path == MENU_HUMIDIFIER_PATH and not bool(value):
+        cache_resource_value(INFO_HUMIDIFIER_STATUS_RESOURCE_KEY, raw=2, value=2, source="write")
 
 
 def sync_writable_field_success(field: WritableField, *, raw_value: int, scaled_value: float) -> None:
@@ -453,6 +492,12 @@ def sync_writable_field_success(field: WritableField, *, raw_value: int, scaled_
         else:
             setattr(cache, field.cache_raw_attr, raw_value)
             setattr(cache, field.cache_scaled_attr, scaled_value)
+    cache_resource_value(
+        resource_key("A", field.address),
+        raw=raw_value,
+        value=scaled_value,
+        source="write",
+    )
 
 
 def read_menu_value_from_controller(node: dict[str, Any]) -> dict[str, Any]:
@@ -485,8 +530,13 @@ def read_menu_value_from_controller(node: dict[str, Any]) -> dict[str, Any]:
             scale = infer_menu_numeric_scale(node, editor_type)
             value = decoded_value / scale if editor_type == "float" else decoded_value
 
-    cache_menu_value(path, raw=raw_value, value=value, source="modbus")
-    return {"path": path, "raw": raw_value, "value": value}
+    cache_menu_value_for_node(node, raw=raw_value, value=value, source="modbus")
+    return {
+        "path": path,
+        "resource_key": resource_key_for_menu_node(node),
+        "raw": raw_value,
+        "value": value,
+    }
 
 
 def parse_menu_boolean_value(value: Any) -> bool:
@@ -576,14 +626,24 @@ def write_menu_value_to_controller(node: dict[str, Any], incoming_value: Any) ->
             if wr.isError():
                 raise RuntimeError(f"Modbus write error (register {index}): {wr}")
 
-    sync_menu_write_success(path, raw=raw_value, value=value)
+    sync_menu_write_success(
+        path,
+        raw=raw_value,
+        value=value,
+        canonical_key=resource_key_for_menu_node(node),
+    )
     logger.info(
         "Menu value written successfully: %s=%s on %s",
         path,
         value,
         get_active_com_port(),
     )
-    return {"path": path, "raw": raw_value, "value": value}
+    return {
+        "path": path,
+        "resource_key": resource_key_for_menu_node(node),
+        "raw": raw_value,
+        "value": value,
+    }
 
 
 def ensure_dashboard_config_cache() -> None:
@@ -603,7 +663,7 @@ def ensure_dashboard_config_cache() -> None:
         try:
             read_menu_value_from_controller(node)
         except Exception as exc:
-            cache_menu_error(path, normalize_modbus_error(exc))
+            cache_menu_error_for_node(node, normalize_modbus_error(exc))
 
 
 def write_writable_field(field: WritableField):
@@ -665,13 +725,13 @@ def handle_menu_value_get():
 
     refresh_requested = str(request.args.get("refresh", "")).strip().lower() in {"1", "true", "yes"}
     if not refresh_requested:
-        cached_value = get_cached_menu_value(path)
+        cached_value = get_cached_menu_value_for_node(node)
         if cached_value is not None and cached_value.get("value") is not None:
             return jsonify(serialize_menu_value(node, cached_value, cached=True))
 
     try:
         read_menu_value_from_controller(node)
-        cached_value = get_cached_menu_value(path)
+        cached_value = get_cached_menu_value_for_node(node)
         if cached_value is None:
             raise RuntimeError("Menu value read succeeded, but no cached value was produced.")
         clear_runtime_error()
@@ -682,7 +742,7 @@ def handle_menu_value_get():
         reset_modbus_client()
         error_message = normalize_modbus_error(exc)
         note_runtime_error(error_message)
-        cache_menu_error(path, error_message)
+        cache_menu_error_for_node(node, error_message)
         return jsonify({"ok": False, "error": error_message, "path": path}), 400
 
 
@@ -703,7 +763,7 @@ def handle_menu_value_post():
             return jsonify({"ok": False, "error": f"Menu path '{path}' was not found."}), 404
 
         write_menu_value_to_controller(node, body["value"])
-        cached_value = get_cached_menu_value(path)
+        cached_value = get_cached_menu_value_for_node(node)
         if cached_value is None:
             raise RuntimeError("Menu value write succeeded, but no cached value was produced.")
         clear_runtime_error()
@@ -715,7 +775,11 @@ def handle_menu_value_post():
         error_message = normalize_modbus_error(exc)
         path = str((request.get_json(silent=True) or {}).get("path") or "").strip()
         if path:
-            cache_menu_error(path, error_message)
+            node = find_menu_node(path)
+            if node:
+                cache_menu_error_for_node(node, error_message)
+            else:
+                cache_menu_error(path, error_message)
         note_runtime_error(error_message)
         return jsonify({"ok": False, "error": error_message}), 400
 
@@ -740,7 +804,12 @@ def handle_humidifier_toggle():
         if onoff_wr.isError():
             raise RuntimeError(f"Modbus write error (humidifier remote on/off coil): {onoff_wr}")
 
-        sync_menu_write_success(MENU_HUMIDIFIER_PATH, raw=target_state, value=target_state)
+        sync_menu_write_success(
+            MENU_HUMIDIFIER_PATH,
+            raw=target_state,
+            value=target_state,
+            canonical_key=resource_key("D", HUMIDIFIER_REMOTE_ONOFF_COIL),
+        )
         logger.info(
             "Humidifier remote on/off set to %s on %s",
             "ON" if target_state else "OFF",

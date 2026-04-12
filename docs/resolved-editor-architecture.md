@@ -156,12 +156,19 @@ All live in `menu_service.py`.
 | Value read | `serialize_menu_value()` in `GET /api/menu-value` | Every value fetch |
 | Value write | `serialize_menu_value()` in `POST /api/menu-value` | Every write response |
 
-## Dashboard Sync Map
+## Dashboard Sync Map And Resource Cache
 
 Menu nodes that should be pre-populated from the periodic dashboard poll
 carry a `"dashboard_sync"` property in `display_menu.json`.  The value is
 a dot-path into the `/api/temp` response (e.g. `"last_setpoint_c"`,
 `"info.humidifier_status"`).
+
+For Modbus-backed nodes, `dashboard_sync` is only a frontend convenience. The
+canonical value identity is the resource key derived from the node register
+metadata, for example `I:140` or `D:8`.  `/api/temp` should prefer
+`runtime.cache.resource_values` for overlapping Modbus values so dashboard
+refreshes do not overwrite fresher direct menu reads with stale legacy cache
+fields.
 
 At page render the backend calls `collect_dashboard_sync_map(root)` which
 walks the tree, collects every `dashboard_sync` annotation, and returns a
@@ -176,9 +183,12 @@ To add a new dashboard-synced value:
 
 1. Add `"dashboard_sync": "<payload_key>"` to the node in `display_menu.json`.
 2. Ensure `/api/temp` already returns the value at that key.
-3. No Python or JS code changes needed.
+3. For Modbus-backed values, ensure the backend updates and serializes the
+   canonical resource cache for the corresponding `family:index` key.
+4. No frontend code changes are required.
 
-See `docs/menu-path-conventions.md` for the full mapping table.
+See `docs/menu-path-conventions.md` for the full mapping table, and
+`docs/resource-cache-architecture.md` for the resource-cache invariant.
 
 ## Frontend Fallback
 
