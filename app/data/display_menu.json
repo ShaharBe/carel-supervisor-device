@@ -47,9 +47,9 @@
           "dashboard_sync": "info.humidifier_network_enabled",
           "range_or_options": "Auto/Off",
           "note": [
-            "Assumes: D,81 == \"1\".",
-            "This coil indirectly toggles I,136 between 0 (on duty) and 2 (disabled via network)",
-            "Datasheet: remote on/off from network: 0 = disabled, 1 = enabled"
+            "1. Assumes: D,81 == \"1\".",
+            "2. This coil indirectly toggles I,136 between 0 (on duty) and 2 (disabled via network)",
+            "3. Datasheet: remote on/off from network: 0 = disabled, 1 = enabled"
           ],
           "is_caption": false,
           "is_stub": false,
@@ -1264,8 +1264,8 @@
                   },
                   "range_or_options": "yes,no",
                   "note": [
-                    "There is probably no option to remotely enable the 'manual procedure' from the Modbus network",
-                    "Treat this as a read-only field that indicates whether the humidifier is currently in manual procedure mode or not"
+                    "1. There is probably no option to remotely enable the 'manual procedure' from the Modbus network",
+                    "2. Treat this as a read-only field that indicates whether the humidifier is currently in manual procedure mode or not"
                   ],
                   "is_caption": false,
                   "is_stub": false,
@@ -1281,8 +1281,8 @@
                   "register": null,
                   "range_or_options": "yes,no",
                   "note": [
-                    "There is probably no option to remotely turn on the 'power contactor' (electrodes) from the Modbus network",
-                    "To indirectly turn 'power contactor' on, simply turn on the humidifier (Set > Humidifier"
+                    "1. There is probably no option to remotely turn on the 'power contactor' (electrodes) from the Modbus network",
+                    "2. To indirectly turn 'power contactor' on, simply turn on the humidifier (Set > Humidifier)"
                   ],
                   "is_caption": false,
                   "is_stub": false,
