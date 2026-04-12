@@ -1436,7 +1436,10 @@
                     ]
                   },
                   "range_or_options": "yes,no",
-                  "note": null,
+                  "note": ["\n",
+                    "1. This is probably not reflected in the Modbus coil (D,70)",
+                    "2. Manual procedure must initially be manually enabled from the local keypad/display",
+                    "3. Once enabled, the outputs (power contactor, fill valve, drain pump, alarm, dehumidifier) can be turned on/off from here"],
                   "is_caption": false,
                   "is_stub": false,
                   "page_direction": null
@@ -1445,7 +1448,7 @@
                   "path": "3.3.4.2",
                   "title": "Power contactor",
                   "display_label": "Power contactor",
-                  "raw_text": "Power contactor (D,71,R/W) [yes,no]",
+                  "raw_text": "Power contactor (D,71,R/W) [off,on]",
                   "kind": "leaf",
                   "children": [],
                   "register": {
@@ -1457,16 +1460,16 @@
                     "type": "boolean",
                     "options": [
                       {
-                        "value": true,
-                        "label": "yes"
+                        "value": false,
+                        "label": "off"
                       },
                       {
-                        "value": false,
-                        "label": "no"
+                        "value": true,
+                        "label": "on"
                       }
                     ]
                   },
-                  "range_or_options": "yes,no",
+                  "range_or_options": "off,on",
                   "note": null,
                   "is_caption": false,
                   "is_stub": false,
@@ -1538,7 +1541,7 @@
                   "path": "3.3.4.5",
                   "title": "Alarm",
                   "display_label": "Alarm",
-                  "raw_text": "Alarm (D,74,R/W) [yes,no]",
+                  "raw_text": "Alarm (D,74,R/W) [off,on]",
                   "kind": "leaf",
                   "children": [],
                   "register": {
@@ -1550,16 +1553,16 @@
                     "type": "boolean",
                     "options": [
                       {
-                        "value": true,
-                        "label": "yes"
+                        "value": false,
+                        "label": "off"
                       },
                       {
-                        "value": false,
-                        "label": "no"
+                        "value": true,
+                        "label": "on"
                       }
                     ]
                   },
-                  "range_or_options": "yes,no",
+                  "range_or_options": "off,on",
                   "note": null,
                   "is_caption": false,
                   "is_stub": false,
@@ -1599,7 +1602,9 @@
               ],
               "register": null,
               "range_or_options": null,
-              "note": null,
+              "note": ["\n",
+                "1. Manual procedure must initially be manually enabled from the local keypad/display",
+                "2. Once enabled, all outputs (power contactor, fill valve, drain pump, alarm, dehumidifier) can be turned on/off from here"],
               "is_caption": false,
               "is_stub": false,
               "page_direction": null
