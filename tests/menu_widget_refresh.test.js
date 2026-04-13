@@ -16,6 +16,29 @@ function flushAsyncWork() {
   return new Promise((resolve) => setImmediate(resolve));
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function dispatchElementEvent(element, type, patch = {}) {
+  const event = {
+    type,
+    target: element,
+    currentTarget: element,
+    pointerType: 'touch',
+    pointerId: 1,
+    clientX: 0,
+    clientY: 0,
+    preventDefault() {},
+    stopPropagation() {},
+    ...patch
+  };
+
+  for (const handler of element.listeners.get(type) || []) {
+    handler(event);
+  }
+}
+
 function buildMenuValueResponse(path, value, extra = {}) {
   return {
     json: async () => ({
@@ -24,6 +47,65 @@ function buildMenuValueResponse(path, value, extra = {}) {
       value,
       ...extra
     })
+  };
+}
+
+function createLongPressPayload() {
+  return {
+    ok: true,
+    error: null,
+    source_path: 'test',
+    dashboard_sync_map: {},
+    root: {
+      path: '',
+      title: 'Root',
+      display_label: 'Root',
+      raw_text: 'Root',
+      kind: 'root',
+      children: [
+        {
+          path: '1',
+          title: 'Service',
+          display_label: 'Service',
+          raw_text: 'Service',
+          kind: 'menu',
+          children: [],
+          register: null,
+          range_or_options: null,
+          note: null,
+          is_caption: false,
+          is_stub: false,
+          page_direction: null
+        },
+        {
+          path: '2',
+          title: 'Editable Leaf',
+          display_label: 'Editable Leaf',
+          raw_text: 'Editable Leaf [yes,no]',
+          kind: 'leaf',
+          children: [],
+          register: null,
+          editor: {
+            type: 'boolean',
+            options: [
+              { value: true, label: 'yes' },
+              { value: false, label: 'no' }
+            ]
+          },
+          range_or_options: 'yes,no',
+          note: null,
+          is_caption: false,
+          is_stub: false,
+          page_direction: null
+        }
+      ],
+      register: null,
+      range_or_options: null,
+      note: null,
+      is_caption: false,
+      is_stub: false,
+      page_direction: null
+    }
   };
 }
 
@@ -437,4 +519,34 @@ test('renders array notes as multiline detail text', () => {
 
   assert.ok(noteLine, 'expected menu detail to include a note line');
   assert.equal(noteLine.textContent, 'Note: First line.\nSecond line.');
+});
+
+test('touch long press opens a menu item like double click', async () => {
+  const harness = createMenuWidgetHarness({
+    payload: createLongPressPayload()
+  });
+  const { widget, document } = harness;
+
+  widget.init({ longPressDurationMs: 100 });
+
+  const serviceLine = document.getElementById('menuScreen').children[1];
+  dispatchElementEvent(serviceLine, 'pointerdown');
+  await sleep(130);
+
+  assert.equal(widget.__testing.getCurrentMenuPath(), '1');
+});
+
+test('touch long press opens the editor for editable leaves', async () => {
+  const harness = createMenuWidgetHarness({
+    payload: createLongPressPayload()
+  });
+  const { widget, document } = harness;
+
+  widget.init({ longPressDurationMs: 100 });
+
+  const editableLine = document.getElementById('menuScreen').children[2];
+  dispatchElementEvent(editableLine, 'pointerdown');
+  await sleep(130);
+
+  assert.equal(document.getElementById('menuEditModalTitle').textContent, 'Edit Editable Leaf');
 });

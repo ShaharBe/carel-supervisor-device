@@ -163,6 +163,8 @@ function createWindow(document, options = {}) {
     localStorage: options.localStorage || createStorage(options.localStorageStore),
     sessionStorage: options.sessionStorage || createStorage(options.sessionStorageStore),
     matchMedia: () => ({ matches: false }),
+    setTimeout,
+    clearTimeout,
     addEventListener: () => {}
   };
 }

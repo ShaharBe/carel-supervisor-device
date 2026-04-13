@@ -332,6 +332,9 @@
       font: inherit;
       text-align: left;
       cursor: pointer;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-user-select: none;
     }
     .menu-line-leaf {
       grid-template-columns: minmax(0, 1fr) fit-content(35%);

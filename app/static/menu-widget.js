@@ -51,6 +51,8 @@ window.CarelMenuWidget = (() => {
   };
   let menuDisplaySettings = { ...defaultMenuDisplaySettings };
   const menuLocationStorageKey = 'carel-menu-location';
+  const defaultMenuLongPressDurationMs = 1000;
+  let menuLongPressDurationMs = defaultMenuLongPressDurationMs;
 
   function clampNumber(value, min, max, fallback) {
     const numericValue = Number(value);
@@ -1099,20 +1101,18 @@ window.CarelMenuWidget = (() => {
       line.setAttribute('role', 'option');
       line.setAttribute('aria-selected', actualIndex === menuSelectedIndex ? 'true' : 'false');
       line.title = child.raw_text;
-      line.addEventListener('click', () => {
+      const longPressState = bindMenuLongPress(line, child, actualIndex);
+      line.addEventListener('click', (event) => {
+        if (longPressState.consumeClick(event)) {
+          return;
+        }
         menuSelectedIndex = actualIndex;
         persistMenuLocation();
         renderMenuWidget();
         screen.focus();
       });
       line.addEventListener('dblclick', () => {
-        menuSelectedIndex = actualIndex;
-        persistMenuLocation();
-        if (isMenuNodeEditable(child)) {
-          openMenuEditModal(child);
-          return;
-        }
-        openSelectedMenuItem();
+        activateMenuRow(child, actualIndex);
       });
 
       const label = document.createElement('span');
@@ -1196,6 +1196,105 @@ window.CarelMenuWidget = (() => {
     }
 
     renderMenuWidget();
+  }
+
+  function activateMenuRow(child, actualIndex) {
+    menuSelectedIndex = actualIndex;
+    persistMenuLocation();
+    if (isMenuNodeEditable(child)) {
+      openMenuEditModal(child);
+      return;
+    }
+    openSelectedMenuItem();
+  }
+
+  function bindMenuLongPress(line, child, actualIndex) {
+    let timerId = null;
+    let pointerId = null;
+    let startX = 0;
+    let startY = 0;
+    let suppressClick = false;
+    let suppressClickTimer = null;
+    const maxMovePx = 12;
+
+    function clearLongPressTimer() {
+      if (timerId !== null) {
+        window.clearTimeout(timerId);
+        timerId = null;
+      }
+      pointerId = null;
+    }
+
+    function clearSuppressClick() {
+      suppressClick = false;
+      if (suppressClickTimer !== null) {
+        window.clearTimeout(suppressClickTimer);
+        suppressClickTimer = null;
+      }
+    }
+
+    function armSuppressClick() {
+      clearSuppressClick();
+      suppressClick = true;
+      suppressClickTimer = window.setTimeout(clearSuppressClick, 700);
+    }
+
+    function isLongPressPointer(event) {
+      return event.pointerType === 'touch' || event.pointerType === 'pen';
+    }
+
+    line.addEventListener('pointerdown', (event) => {
+      if (!isLongPressPointer(event)) {
+        return;
+      }
+      clearLongPressTimer();
+      pointerId = event.pointerId;
+      startX = Number(event.clientX) || 0;
+      startY = Number(event.clientY) || 0;
+      timerId = window.setTimeout(() => {
+        timerId = null;
+        armSuppressClick();
+        activateMenuRow(child, actualIndex);
+      }, menuLongPressDurationMs);
+    });
+
+    line.addEventListener('pointermove', (event) => {
+      if (timerId === null || event.pointerId !== pointerId) {
+        return;
+      }
+
+      const deltaX = (Number(event.clientX) || 0) - startX;
+      const deltaY = (Number(event.clientY) || 0) - startY;
+      if (Math.hypot(deltaX, deltaY) > maxMovePx) {
+        clearLongPressTimer();
+      }
+    });
+
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach((eventName) => {
+      line.addEventListener(eventName, (event) => {
+        if (event.pointerId === pointerId) {
+          clearLongPressTimer();
+        }
+      });
+    });
+
+    line.addEventListener('contextmenu', (event) => {
+      if (suppressClick || timerId !== null) {
+        event.preventDefault();
+      }
+    });
+
+    return {
+      consumeClick(event) {
+        if (!suppressClick) {
+          return false;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        clearSuppressClick();
+        return true;
+      }
+    };
   }
 
   function goBackInMenu() {
@@ -1657,6 +1756,12 @@ window.CarelMenuWidget = (() => {
 
   function init(options = {}) {
     refreshPage = typeof options.refreshPage === 'function' ? options.refreshPage : null;
+    menuLongPressDurationMs = clampNumber(
+      options.longPressDurationMs,
+      100,
+      3000,
+      defaultMenuLongPressDurationMs
+    );
     bindEventListeners();
     initializeMenuDisplaySettings();
     initializeMenuWidget();
