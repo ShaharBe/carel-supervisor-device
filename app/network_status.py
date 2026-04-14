@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import select
 import re
 import subprocess
 import threading
@@ -12,6 +13,7 @@ from typing import Callable, Optional, Sequence
 
 COMMAND_TIMEOUT_S = 5.0
 MONITOR_RESTART_BACKOFF_S = 5.0
+SIGNAL_REFRESH_INTERVAL_S = 30.0
 
 logger = logging.getLogger("carel_supervisor")
 
@@ -48,6 +50,7 @@ class NetworkSnapshot:
     ssid: str | None = None
     interface: str | None = None
     signal_dbm: int | None = None
+    signal_quality: str | None = None
     signal_percent: int | None = None
     updated_utc: str | None = None
     error: str | None = None
@@ -187,6 +190,20 @@ def parse_nmcli_active_wifi(nmcli_wifi_output: str) -> NmcliWifiInfo:
     return NmcliWifiInfo()
 
 
+def classify_signal_quality(signal_dbm: int | None) -> str | None:
+    if signal_dbm is None:
+        return None
+    if signal_dbm >= -50:
+        return "High"
+    if signal_dbm >= -60:
+        return "Medium"
+    if signal_dbm >= -70:
+        return "Low"
+    if signal_dbm >= -80:
+        return "Weak"
+    return "Unusable"
+
+
 def _optional_command(command_runner: CommandRunner, args: Sequence[str]) -> str | None:
     try:
         return command_runner(args, COMMAND_TIMEOUT_S)
@@ -257,6 +274,7 @@ def read_network_snapshot(
         ssid=ssid,
         interface=active_wifi.interface,
         signal_dbm=iw_info.signal_dbm,
+        signal_quality=classify_signal_quality(iw_info.signal_dbm),
         signal_percent=wifi_info.signal_percent,
         updated_utc=utc_now_iso(),
         error=None,
@@ -287,11 +305,20 @@ def _monitor_loop(stop_event: threading.Event) -> None:
             )
 
             if proc.stdout is not None:
-                for line in proc.stdout:
-                    if stop_event.is_set():
-                        break
-                    if line.strip():
+                next_signal_refresh = time.monotonic() + SIGNAL_REFRESH_INTERVAL_S
+                while not stop_event.is_set():
+                    timeout_s = max(0.0, next_signal_refresh - time.monotonic())
+                    readable, _, _ = select.select([proc.stdout], [], [], timeout_s)
+                    if readable:
+                        line = proc.stdout.readline()
+                        if line == "":
+                            break
+                        if line.strip():
+                            refresh_network_snapshot()
+                            next_signal_refresh = time.monotonic() + SIGNAL_REFRESH_INTERVAL_S
+                    else:
                         refresh_network_snapshot()
+                        next_signal_refresh = time.monotonic() + SIGNAL_REFRESH_INTERVAL_S
 
             return_code = proc.wait()
             if not stop_event.is_set():

@@ -53,6 +53,19 @@ def test_parse_active_wifi_device_selects_connected_wifi():
     assert active.connection == "Plant:WiFi"
 
 
+def test_classify_signal_quality_uses_dbm_ranges():
+    assert network_status.classify_signal_quality(-30) == "High"
+    assert network_status.classify_signal_quality(-50) == "High"
+    assert network_status.classify_signal_quality(-51) == "Medium"
+    assert network_status.classify_signal_quality(-60) == "Medium"
+    assert network_status.classify_signal_quality(-61) == "Low"
+    assert network_status.classify_signal_quality(-70) == "Low"
+    assert network_status.classify_signal_quality(-71) == "Weak"
+    assert network_status.classify_signal_quality(-80) == "Weak"
+    assert network_status.classify_signal_quality(-81) == "Unusable"
+    assert network_status.classify_signal_quality(None) is None
+
+
 def test_read_network_snapshot_combines_nmcli_and_iw_details():
     def fake_command(args: Sequence[str], timeout_s: float) -> str:
         if args[0] == "nmcli" and "status" in args:
@@ -73,6 +86,7 @@ Connected to aa:bb:cc:dd:ee:ff (on wlan0)
     assert snapshot.interface == "wlan0"
     assert snapshot.ssid == "Plant WiFi"
     assert snapshot.signal_dbm == -58
+    assert snapshot.signal_quality == "Medium"
     assert snapshot.signal_percent == 72
     assert snapshot.error is None
 

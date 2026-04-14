@@ -43,6 +43,7 @@ class TestApiTemp:
                 "ssid": "Plant WiFi",
                 "interface": "wlan0",
                 "signal_dbm": -58,
+                "signal_quality": "Medium",
                 "signal_percent": 72,
                 "updated_utc": "2026-04-14T00:00:00+00:00",
                 "error": None,
@@ -57,6 +58,7 @@ class TestApiTemp:
         assert data["network"]["connected"] is True
         assert data["network"]["ssid"] == "Plant WiFi"
         assert data["network"]["signal_dbm"] == -58
+        assert data["network"]["signal_quality"] == "Medium"
 
     def test_network_block_serializes_disconnected_wifi(self, app_client, monkeypatch):
         import app as app_module
@@ -70,6 +72,7 @@ class TestApiTemp:
                 "ssid": None,
                 "interface": None,
                 "signal_dbm": None,
+                "signal_quality": None,
                 "signal_percent": None,
                 "updated_utc": "2026-04-14T00:00:00+00:00",
                 "error": None,

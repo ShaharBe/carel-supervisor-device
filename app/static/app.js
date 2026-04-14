@@ -273,7 +273,8 @@
     const ssid = network.ssid || 'connected';
     let signalText = '';
     if (isFiniteNumber(network.signal_dbm)) {
-      signalText = ' (' + network.signal_dbm + ' dBm)';
+      const qualityText = network.signal_quality ? ', ' + network.signal_quality : '';
+      signalText = ' (' + network.signal_dbm + ' dBm' + qualityText + ')';
     } else if (isFiniteNumber(network.signal_percent)) {
       signalText = ' (' + network.signal_percent + '%)';
     }
