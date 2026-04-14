@@ -31,6 +31,60 @@ class TestApiTemp:
         assert "com_port" in data["config"]
         assert "baudrate" in data["config"]
 
+    def test_network_block_present(self, app_client, monkeypatch):
+        import app as app_module
+        from runtime import poll_registers_once
+
+        monkeypatch.setattr(
+            app_module,
+            "get_network_snapshot",
+            lambda: {
+                "connected": True,
+                "ssid": "Plant WiFi",
+                "interface": "wlan0",
+                "signal_dbm": -58,
+                "signal_percent": 72,
+                "updated_utc": "2026-04-14T00:00:00+00:00",
+                "error": None,
+            },
+        )
+        poll_registers_once()
+
+        resp = app_client.get("/api/temp")
+        data = resp.get_json()
+
+        assert resp.status_code == 200
+        assert data["network"]["connected"] is True
+        assert data["network"]["ssid"] == "Plant WiFi"
+        assert data["network"]["signal_dbm"] == -58
+
+    def test_network_block_serializes_disconnected_wifi(self, app_client, monkeypatch):
+        import app as app_module
+        from runtime import poll_registers_once
+
+        monkeypatch.setattr(
+            app_module,
+            "get_network_snapshot",
+            lambda: {
+                "connected": False,
+                "ssid": None,
+                "interface": None,
+                "signal_dbm": None,
+                "signal_percent": None,
+                "updated_utc": "2026-04-14T00:00:00+00:00",
+                "error": None,
+            },
+        )
+        poll_registers_once()
+
+        resp = app_client.get("/api/temp")
+        data = resp.get_json()
+
+        assert resp.status_code == 200
+        assert data["network"]["connected"] is False
+        assert data["network"]["ssid"] is None
+        assert data["network"]["error"] is None
+
     def test_prefers_canonical_resource_over_stale_dashboard_field(self, app_client):
         import runtime
 
@@ -406,6 +460,13 @@ class TestApiReboot:
 # ── GET / (page payload includes dashboard_sync_map) ─────────────────────
 
 class TestIndexPayload:
+    def test_footer_includes_network_status_element(self, app_client):
+        resp = app_client.get("/")
+        html = resp.data.decode("utf-8")
+
+        assert resp.status_code == 200
+        assert 'id="networkStatus"' in html
+
     def test_dashboard_sync_map_in_page(self, app_client):
         resp = app_client.get("/")
         assert resp.status_code == 200

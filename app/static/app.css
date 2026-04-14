@@ -450,6 +450,17 @@
       gap: 12px;
       flex-wrap: wrap;
     }
+    .footer-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1 1 260px;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+    #networkStatus {
+      overflow-wrap: anywhere;
+    }
     .footer-buttons {
       display: inline-flex;
       align-items: center;
@@ -560,6 +571,7 @@
       .modal .field input { width: 100%; }
       .alarms-panel { padding: 12px; }
       .footer-actions { align-items: stretch; }
+      .footer-status { width: 100%; }
     }
 
     @media (max-width: 900px) and (orientation: landscape) {

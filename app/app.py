@@ -71,6 +71,7 @@ from modbus_map import (
     SETPOINT_REG,
     TEMP_REG,
 )
+from network_status import get_network_snapshot, start_network_status_monitor
 from runtime import (
     BAUDRATE,
     DRAIN_CYL1_RESOURCE_KEY,
@@ -309,6 +310,8 @@ def api_temp():
             "resources": _resource_metadata(resource_values),
         }
 
+    data["network"] = get_network_snapshot()
+
     ok = data["temp_c"] is not None and data["last_error"] is None
     resp: Dict[str, Any] = {
         "ok": bool(ok),
@@ -512,6 +515,7 @@ def start_runtime_if_needed() -> None:
     """Start background runtime work explicitly during real app startup."""
     if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or os.environ.get("FLASK_DEBUG") != "1":
         start_background_poller()
+        start_network_status_monitor()
 
 
 def main() -> None:

@@ -235,6 +235,55 @@
     document.getElementById('infoError').className = info.error ? 'muted err' : 'muted';
   }
 
+  function isFiniteNumber(value) {
+    return typeof value === 'number' && Number.isFinite(value);
+  }
+
+  function renderNetwork(network) {
+    const networkStatus = document.getElementById('networkStatus');
+    if (!networkStatus) {
+      return;
+    }
+
+    networkStatus.className = 'muted';
+    networkStatus.title = '';
+
+    if (!network) {
+      networkStatus.textContent = 'Wi-Fi: unavailable';
+      networkStatus.className = 'muted err';
+      networkStatus.title = 'Network status is missing from the server response.';
+      return;
+    }
+
+    if (network.error) {
+      networkStatus.textContent = 'Wi-Fi: unavailable';
+      networkStatus.className = 'muted err';
+      networkStatus.title = network.error;
+      return;
+    }
+
+    if (!network.connected) {
+      networkStatus.textContent = 'Wi-Fi: no network';
+      if (network.interface) {
+        networkStatus.title = 'Interface: ' + network.interface;
+      }
+      return;
+    }
+
+    const ssid = network.ssid || 'connected';
+    let signalText = '';
+    if (isFiniteNumber(network.signal_dbm)) {
+      signalText = ' (' + network.signal_dbm + ' dBm)';
+    } else if (isFiniteNumber(network.signal_percent)) {
+      signalText = ' (' + network.signal_percent + '%)';
+    }
+
+    networkStatus.textContent = 'Wi-Fi: ' + ssid + signalText;
+    if (network.interface) {
+      networkStatus.title = 'Interface: ' + network.interface;
+    }
+  }
+
   async function performRefresh() {
     try {
       const response = await fetch('api/temp');
@@ -270,6 +319,7 @@
 
       renderInfo(payload.info);
       renderAlarms(payload.alarms);
+      renderNetwork(payload.network);
     } catch (error) {
       document.getElementById('status').textContent = 'UI error';
       document.getElementById('status').className = 'top-value err';
@@ -282,6 +332,7 @@
       document.getElementById('alarmsEmpty').textContent = 'Unable to render alarms.';
       document.getElementById('alarmsHint').textContent = String(error);
       document.getElementById('alarmsHint').className = 'alarm-hint err';
+      renderNetwork({ error: String(error) });
     }
   }
 
