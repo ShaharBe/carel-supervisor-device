@@ -15,8 +15,12 @@ class FakeElement {
     this.children = [];
     this.attributes = new Map();
     this.listeners = new Map();
+    const styleProperties = new Map();
     this.style = {
-      setProperty: () => {},
+      setProperty: (name, value) => {
+        styleProperties.set(name, String(value));
+      },
+      getPropertyValue: (name) => styleProperties.get(name) || '',
       gridTemplateRows: ''
     };
     this.classList = {
@@ -102,6 +106,7 @@ function createDocument(payload) {
     'menuEditNumberInput',
     'menuEditSelectField',
     'menuEditSelectInput',
+    'menuFontFamilySelect',
     'menuFontSizeRange',
     'menuFontSizeValue',
     'menuFontWidthRange',
@@ -117,6 +122,7 @@ function createDocument(payload) {
   ];
   const nodes = new Map(ids.map((id) => [id, new FakeElement(id)]));
   nodes.get('displayMenuData').textContent = JSON.stringify(payload);
+  nodes.get('menuFontFamilySelect').value = 'current';
   nodes.get('menuFontSizeRange').value = '100';
   nodes.get('menuFontWidthRange').value = '88';
 

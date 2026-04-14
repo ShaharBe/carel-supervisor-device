@@ -1,3 +1,13 @@
+    @font-face {
+      font-family: "Bubbledot";
+      src:
+        url("fonts/bubbledot/Bubbledot-Medium.woff2") format("woff2"),
+        url("fonts/bubbledot/Bubbledot-Medium.ttf") format("truetype");
+      font-weight: 500;
+      font-style: normal;
+      font-display: swap;
+    }
+
     /* Base / Desktop styles */
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 28px; }
     .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; max-width: 520px; }
@@ -190,6 +200,7 @@
     .alarm-hint { margin-top: 8px; min-height: 1.2em; }
     .menu-widget {
       --menu-font-size: 1.45rem;
+      --menu-font-family: Consolas, "Courier New", monospace;
       --menu-text-scale-x: 0.88;
       --menu-letter-spacing: -0.015em;
       margin: 16px 0;
@@ -243,6 +254,15 @@
     .menu-display-control input[type="range"] {
       width: 110px;
       padding: 0;
+    }
+    .menu-display-control select {
+      width: auto;
+      padding: 5px 8px;
+      border: 1px solid #b9c9b2;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.88);
+      color: #2b3b24;
+      font: inherit;
     }
     .menu-display-value {
       min-width: 3.8ch;
@@ -302,7 +322,7 @@
         linear-gradient(180deg, #dce7cf 0%, #c3d3b0 100%);
       display: grid;
       gap: 3px;
-      font-family: Consolas, "Courier New", monospace;
+      font-family: var(--menu-font-family);
       font-size: var(--menu-font-size);
       line-height: 1.05;
       color: #22301b;

@@ -45,9 +45,14 @@ window.CarelMenuWidget = (() => {
     busy: false
   };
   const menuDisplayStorageKey = 'carel-menu-display-settings';
+  const menuFontFamilies = {
+    current: 'Consolas, "Courier New", monospace',
+    bubbledot: '"Bubbledot", Consolas, "Courier New", monospace'
+  };
   const defaultMenuDisplaySettings = {
     sizePercent: 100,
-    widthPercent: 88
+    widthPercent: 88,
+    fontFamily: 'current'
   };
   let menuDisplaySettings = { ...defaultMenuDisplaySettings };
   const menuLocationStorageKey = 'carel-menu-location';
@@ -63,9 +68,13 @@ window.CarelMenuWidget = (() => {
   }
 
   function sanitizeMenuDisplaySettings(rawSettings) {
+    const fontFamily = String(rawSettings?.fontFamily || defaultMenuDisplaySettings.fontFamily);
     return {
       sizePercent: clampNumber(rawSettings?.sizePercent, 80, 180, defaultMenuDisplaySettings.sizePercent),
-      widthPercent: clampNumber(rawSettings?.widthPercent, 70, 110, defaultMenuDisplaySettings.widthPercent)
+      widthPercent: clampNumber(rawSettings?.widthPercent, 70, 110, defaultMenuDisplaySettings.widthPercent),
+      fontFamily: Object.prototype.hasOwnProperty.call(menuFontFamilies, fontFamily)
+        ? fontFamily
+        : defaultMenuDisplaySettings.fontFamily
     };
   }
 
@@ -100,6 +109,7 @@ window.CarelMenuWidget = (() => {
   function syncMenuDisplayControls() {
     document.getElementById('menuFontSizeRange').value = String(menuDisplaySettings.sizePercent);
     document.getElementById('menuFontWidthRange').value = String(menuDisplaySettings.widthPercent);
+    document.getElementById('menuFontFamilySelect').value = menuDisplaySettings.fontFamily;
     document.getElementById('menuFontSizeValue').textContent = menuDisplaySettings.sizePercent + '%';
     document.getElementById('menuFontWidthValue').textContent = menuDisplaySettings.widthPercent + '%';
   }
@@ -111,6 +121,7 @@ window.CarelMenuWidget = (() => {
     const textScale = (menuDisplaySettings.widthPercent / 100).toFixed(3);
 
     screen.style.setProperty('--menu-font-size', fontSizeRem + 'rem');
+    screen.style.setProperty('--menu-font-family', menuFontFamilies[menuDisplaySettings.fontFamily]);
     screen.style.setProperty('--menu-text-scale-x', textScale);
     screen.style.setProperty('--menu-letter-spacing', letterSpacing + 'em');
     syncMenuDisplayControls();
@@ -1700,6 +1711,9 @@ window.CarelMenuWidget = (() => {
     });
     document.getElementById('menuFontWidthRange').addEventListener('input', (event) => {
       updateMenuDisplaySetting({ widthPercent: Number(event.target.value) });
+    });
+    document.getElementById('menuFontFamilySelect').addEventListener('change', (event) => {
+      updateMenuDisplaySetting({ fontFamily: event.target.value });
     });
     document.getElementById('resetMenuDisplayBtn').addEventListener('click', resetMenuDisplaySettings);
     document.getElementById('saveMenuEditBtn').addEventListener('click', saveMenuEdit);

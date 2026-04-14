@@ -521,6 +521,95 @@ test('renders array notes as multiline detail text', () => {
   assert.equal(noteLine.textContent, 'Note: First line.\nSecond line.');
 });
 
+test('menu display settings default to the current font', () => {
+  const harness = createMenuWidgetHarness();
+  const { widget, document } = harness;
+
+  widget.init();
+
+  assert.equal(document.getElementById('menuFontFamilySelect').value, 'current');
+  assert.equal(
+    document.getElementById('menuScreen').style.getPropertyValue('--menu-font-family'),
+    'Consolas, "Courier New", monospace'
+  );
+});
+
+test('menu display settings load the saved Bubbledot font', () => {
+  const localStorageStore = new Map([
+    [
+      'carel-menu-display-settings',
+      JSON.stringify({ sizePercent: 120, widthPercent: 90, fontFamily: 'bubbledot' })
+    ]
+  ]);
+  const harness = createMenuWidgetHarness({ localStorageStore });
+  const { widget, document } = harness;
+
+  widget.init();
+
+  assert.equal(document.getElementById('menuFontFamilySelect').value, 'bubbledot');
+  assert.equal(
+    document.getElementById('menuScreen').style.getPropertyValue('--menu-font-family'),
+    '"Bubbledot", Consolas, "Courier New", monospace'
+  );
+});
+
+test('menu font selector persists Bubbledot font selection', () => {
+  const localStorageStore = new Map();
+  const harness = createMenuWidgetHarness({ localStorageStore });
+  const { widget, document } = harness;
+
+  widget.init();
+  const fontSelect = document.getElementById('menuFontFamilySelect');
+  fontSelect.value = 'bubbledot';
+  dispatchElementEvent(fontSelect, 'change', { target: fontSelect });
+
+  const savedSettings = JSON.parse(localStorageStore.get('carel-menu-display-settings'));
+  assert.equal(savedSettings.fontFamily, 'bubbledot');
+  assert.equal(
+    document.getElementById('menuScreen').style.getPropertyValue('--menu-font-family'),
+    '"Bubbledot", Consolas, "Courier New", monospace'
+  );
+});
+
+test('menu display settings reject unknown saved font values', () => {
+  const localStorageStore = new Map([
+    [
+      'carel-menu-display-settings',
+      JSON.stringify({ sizePercent: 110, widthPercent: 80, fontFamily: 'papyrus' })
+    ]
+  ]);
+  const harness = createMenuWidgetHarness({ localStorageStore });
+  const { widget, document } = harness;
+
+  widget.init();
+
+  assert.equal(document.getElementById('menuFontFamilySelect').value, 'current');
+  assert.equal(
+    document.getElementById('menuScreen').style.getPropertyValue('--menu-font-family'),
+    'Consolas, "Courier New", monospace'
+  );
+});
+
+test('menu display reset restores current font and default sizing', () => {
+  const localStorageStore = new Map([
+    [
+      'carel-menu-display-settings',
+      JSON.stringify({ sizePercent: 135, widthPercent: 100, fontFamily: 'bubbledot' })
+    ]
+  ]);
+  const harness = createMenuWidgetHarness({ localStorageStore });
+  const { widget, document } = harness;
+
+  widget.init();
+  dispatchElementEvent(document.getElementById('resetMenuDisplayBtn'), 'click');
+
+  const savedSettings = JSON.parse(localStorageStore.get('carel-menu-display-settings'));
+  assert.deepEqual(savedSettings, { sizePercent: 100, widthPercent: 88, fontFamily: 'current' });
+  assert.equal(document.getElementById('menuFontFamilySelect').value, 'current');
+  assert.equal(document.getElementById('menuFontSizeValue').textContent, '100%');
+  assert.equal(document.getElementById('menuFontWidthValue').textContent, '88%');
+});
+
 test('touch long press opens a menu item like double click', async () => {
   const harness = createMenuWidgetHarness({
     payload: createLongPressPayload()
